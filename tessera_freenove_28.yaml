@@ -50,9 +50,6 @@ esphome:
       - lambda: |-
           esphome::homeassistant::global_homeassistant_time = nullptr;
           id(homeassistant_time).stop_poller();
-          if (screen_settings::current.standby_seconds >= 60) {
-            settings_screen::set("standby_seconds", 3);
-          }
           tcp_tunnel::start_tcp_tunnel();
 
 esp32:
