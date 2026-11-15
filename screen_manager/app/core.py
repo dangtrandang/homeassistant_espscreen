@@ -932,7 +932,7 @@ def device_prefixes(registry, device_id):
 # Additive schema 1 extension. An absent object retains old firmware/YAML defaults.
 SETTING_RULES = {
     'standby_enabled': (True, None, None),
-    'standby_seconds': (600, 60, 86400),
+    'standby_seconds': (3, 3, 86400),
     'brightness': (100, 5, 100),
     'standby_brightness': (20, 0, 100),
     'night_enabled': (True, None, None),

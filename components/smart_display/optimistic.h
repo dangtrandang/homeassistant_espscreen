@@ -162,7 +162,8 @@ inline Outcome tick(Wish &w, uint32_t now) {
     // A newer wish where Home Assistant gives no answers: it goes a moment after the one before.
     if (w.queued() && !w.watched && now - w.sent_at >= NEXT_UNWATCHED) { settle(w, w.sent); return tick(w, now); }
     if (w.answered_at ? now - w.answered_at >= TAP_HOLD : now - w.sent_at >= (w.watched ? WATCHED_CAP : HOLD_CAP)) {
-      w.phase = w.answered_at ? Phase::IDLE : Phase::LAPSED;
+      if (w.answered_at) return settle(w, w.sent);
+      w.phase = Phase::LAPSED;
       return Outcome::REVERT;
     }
     return Outcome::KEEP;
@@ -183,9 +184,8 @@ inline Outcome answer(Wish &w, bool ok, uint32_t now) {
     w.refused = true;
     return Outcome::REVERT;
   }
-  if (w.queued()) return settle(w, w.sent);
-  w.answered_at = now ? now : 1;
-  return Outcome::KEEP;
+  (void) now;
+  return settle(w, w.sent);
 }
 
 // No answer and no change (watch_call's verdict after eight seconds). REVERT: the wish still waited, put `before` back

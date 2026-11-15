@@ -5,13 +5,13 @@ namespace screen_settings {
 // Stable preference format. Change its version/key only with a migration.
 struct Settings {
   uint32_t version = 1;
-  int32_t standby_enabled = 1, standby_seconds = 600, brightness = 100;
+  int32_t standby_enabled = 1, standby_seconds = 3, brightness = 100;
   int32_t standby_brightness = 20, night_enabled = 1, night_start = 1320;
   int32_t night_end = 420, night_brightness = 10, show_clock = 1;
   int32_t clock_24h = 1, home_on_standby = 0;
   bool valid() const {
     return version == 1 && (standby_enabled == 0 || standby_enabled == 1) &&
-      standby_seconds >= 60 && standby_seconds <= 86400 &&
+      standby_seconds >= 3 && standby_seconds <= 86400 &&
       brightness >= 5 && brightness <= 100 && standby_brightness >= 0 &&
       standby_brightness <= brightness && (night_enabled == 0 || night_enabled == 1) &&
       night_start >= 0 && night_start < 1440 && night_end >= 0 && night_end < 1440 &&

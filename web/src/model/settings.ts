@@ -10,7 +10,7 @@ export const SETTING_GROUPS = [
     { key: "brightness", kind: "number", min: 5, max: 100, step: 5, unit: "%" },
     { key: "dark_mode", kind: "toggle" },
     { key: "standby_enabled", kind: "toggle" },
-    { key: "standby_seconds", kind: "duration", min: 60, max: 86400, needs: "standby_enabled" },
+    { key: "standby_seconds", kind: "duration", min: 3, max: 86400, needs: "standby_enabled" },
     { key: "standby_brightness", kind: "number", min: 0, max: 100, step: 5, unit: "%", needs: "standby_enabled", cap: "brightness" },
   ] },
   { group: "night", icon: "F0594", rows: [
@@ -37,7 +37,7 @@ export const choiceText = (_row: SettingRow, value: unknown) => `${value}°`;
 
 // The same steps as settings_screen.h: seconds low down, quarters of an hour up top; times by the quarter,
 // whole hours while held.
-export const ladderStep = (seconds: number) => (seconds < 300 ? 30 : seconds < 900 ? 60 : seconds < 3600 ? 300 : seconds < 7200 ? 900 : 1800);
+export const ladderStep = (seconds: number) => (seconds < 30 ? 1 : seconds < 60 ? 5 : seconds < 300 ? 30 : seconds < 900 ? 60 : seconds < 3600 ? 300 : seconds < 7200 ? 900 : 1800);
 export function steppedSetting(row: SettingRow, value: number, direction: number, held: boolean, values: Record<string, any>) {
   if (row.kind === "moment") {
     let next = held && value % 60 ? Math.floor(value / 60) * 60 + (direction > 0 ? 60 : 0) : value + direction * (held ? 60 : 15);

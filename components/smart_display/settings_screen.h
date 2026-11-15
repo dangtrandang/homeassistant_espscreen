@@ -206,7 +206,7 @@ inline SetResult set(const std::string &key, int32_t value) {
   int32_t reported = 0;
   auto flag = [](int32_t v) -> int32_t { return v ? 1 : 0; };
   if (key == "standby_enabled") reported = s.standby_enabled = flag(value);
-  else if (key == "standby_seconds") reported = s.standby_seconds = std::clamp<int32_t>(value, 60, 86400);
+  else if (key == "standby_seconds") reported = s.standby_seconds = std::clamp<int32_t>(value, 3, 86400);
   else if (key == "brightness") {
     reported = s.brightness = std::clamp<int32_t>(value, 5, 100);
     s.standby_brightness = std::min(s.standby_brightness, s.brightness);
@@ -251,6 +251,8 @@ inline void set_debug_mode(int32_t value) {
 // How coarse a duration steps: seconds near the bottom, quarters of an hour at the top. Stepping down
 // reads the ladder one second lower, so up and down always land on the same values again.
 inline int32_t ladder_step(int32_t seconds) {
+  if (seconds < 30) return 1;
+  if (seconds < 60) return 5;
   if (seconds < 300) return 30;
   if (seconds < 900) return 60;
   if (seconds < 3600) return 300;
@@ -361,7 +363,7 @@ inline constexpr Row light_rows[] = {
          [](int32_t value) { set("standby_enabled", value); },
          [] { return can_standby; }),
   duration(screen_text::txt::settings_standby_after, []() -> int32_t { return screen_settings::current.standby_seconds; },
-           [](int32_t value) { set("standby_seconds", value); }, 60, 86400,
+           [](int32_t value) { set("standby_seconds", value); }, 3, 86400,
            [] { return screen_settings::current.standby_enabled != 0; },
            [] { return can_standby; }),
   number(screen_text::txt::settings_standby_brightness, []() -> int32_t { return screen_settings::current.standby_brightness; },

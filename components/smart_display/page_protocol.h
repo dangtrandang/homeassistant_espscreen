@@ -111,8 +111,12 @@ struct Pages {
   }
   int step(int index, int direction) const {
     if (!included(index) || (direction != -1 && direction != 1)) return index;
-    for (int i = index + direction; i >= 0 && static_cast<size_t>(i) < records.size(); i += direction)
+    const int n = static_cast<int>(records.size());
+    if (n <= 1) return index;
+    for (int k = 1; k < n; ++k) {
+      const int i = (index + direction * k % n + n) % n;
       if (included(i)) return i;
+    }
     return index;
   }
   int restore(uint64_t previous, bool had_previous) const {

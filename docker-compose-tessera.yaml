@@ -1,0 +1,21 @@
+version: "3.8"
+
+services:
+  esp-screens:
+    container_name: esp-screens
+    image: ghcr.io/maxgramser/homeassistant_espscreen:latest
+    restart: unless-stopped
+    init: true
+    network_mode: host
+    environment:
+      SCREEN_DEV: "1"
+      HA_API: "http://127.0.0.1:8123/api"
+      HA_TOKEN_FILE: "/data/ha_token"
+      ESPHOME_CONFIG: "/config"
+      SCREEN_DATA: "/data"
+    volumes:
+      - ./data:/data
+      - ./esphome:/config
+      - ./ha_token:/data/ha_token:ro
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "--silent", "--output", "/dev/null", "http://127.0.0.1:8099/health"]

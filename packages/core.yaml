@@ -2834,9 +2834,9 @@ number:
     id: setting_standby_seconds
     name: "Standby after"
     entity_category: config
-    min_value: 60
+    min_value: 3
     max_value: 86400
-    step: 60
+    step: 1
     unit_of_measurement: "s"
     update_interval: never
     lambda: return screen_settings::current.standby_seconds;
