@@ -44,8 +44,11 @@ substitutions:
   AUDIO_DIN_PIN: GPIO6
   AUDIO_DAC_DB_AT_0: "-95.5"
   AUDIO_DAC_DB_AT_1: "32"
+  AUDIO_VOLUME_DB_LOW: "-25"
+  AUDIO_VOLUME_DB_HIGH: "20"
   BOOT_BOARD_SETTINGS: |-
     id(ts_microphone)->start();
+    id(ts_media_player).make_call().set_volume(0.85f).perform();
 
 esphome:
   name: ${DEVICE_NAME}
@@ -198,7 +201,7 @@ audio_dac:
     bits_per_sample: 16bit
     use_mclk: true
     use_microphone: false
-    mic_gain: 24DB
+    mic_gain: 36DB
 
 switch:
   - platform: gpio

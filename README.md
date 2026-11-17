@@ -12,8 +12,14 @@ Bản tùy biến nâng cao của [MaxGramser/homeassistant_espscreen](https://g
    - Cảm ứng điện dung **FT6336 (ft63x6)** qua I2C (`SDA: GPIO16`, `SCL: GPIO15`, `INT: GPIO17`, `RST: GPIO18`).
 
 2. **Tích hợp Audio Codec ES8311 & Plugin Voice Assistant (`voice_assist` v0.4.0) chính thức của Tessera**:
-   - Kích hoạt chip giải mã âm thanh **ES8311 (`0x18`)** trên bus I2C `touch_bus` (`SDA: GPIO16`, `SCL: GPIO15`), kết nối cả Microphone analog (`use_microphone: false`, `mic_gain: 24DB`, `DIN: GPIO6`) và Loa (`DOUT: GPIO8`) qua I2S (`MCLK: GPIO4`, `BCLK: GPIO5`, `LRCLK: GPIO7`) ở tần số `16000Hz`, cùng chân điều khiển Amply loa `AP_ENABLE` (`GPIO1`, tích cực mức `LOW` / `inverted: true`).
+   - Kích hoạt chip giải mã âm thanh **ES8311 (`0x18`)** trên bus I2C `touch_bus` (`SDA: GPIO16`, `SCL: GPIO15`), kết nối cả Microphone analog (`use_microphone: false`, `mic_gain: 36DB`, `DIN: GPIO6`) và Loa (`DOUT: GPIO8`) qua I2S (`MCLK: GPIO4`, `BCLK: GPIO5`, `LRCLK: GPIO7`) ở tần số `16000Hz`, cùng chân điều khiển Amply loa `AP_ENABLE` (`GPIO1`, tích cực mức `LOW` / `inverted: true`).
    - Tích hợp plugin **`voice_assist`** của Tessera hỗ trợ nhận diện **Wake Word cục bộ ngay trên chip ESP32-S3 (`micro_wake_word`)** với 3 từ khóa: *"Okay Nabu"*, *"Hey Jarvis"*, *"Hey Mycroft"*.
+   - **Truyền nhận Audio TTS trực tiếp qua ESPHome API (`speaker: ts_speaker`)**: Âm thanh phản hồi từ Home Assistant được truyền dạng PCM stream qua API tunnel cổng 6053 thay vì tải file qua HTTP port 8123, hoạt động ổn định và xuyên suốt ngay cả khi port 8123 bị đóng hoặc VPN WireGuard offline.
+   - **Tối ưu hóa âm lượng và độ nhạy Micro**:
+     - Nâng độ nhạy micro `mic_gain: 36DB` (tăng gấp 4 lần so với mức mặc định 24dB) giúp bắt wake word chuẩn xác từ khoảng cách xa.
+     - Mở rộng dải âm lượng phần cứng ES8311 (`AUDIO_VOLUME_DB_LOW: "-25"`, `AUDIO_VOLUME_DB_HIGH: "20"`), khuếch đại gain phần cứng lên đến `+20dB`.
+     - Tự động thiết lập âm lượng khởi động ở mức `85%`.
+     - Chuẩn hóa tần số lấy mẫu file âm thanh hệ thống `wake.wav` và `thinking.wav` về đúng chuẩn `16000Hz` đồng thời boost biên độ cực đại (~98% full-scale), triệt tiêu hoàn toàn hiện tượng lệch sample rate làm TTS nói nhanh/méo tiếng.
    - Hỗ trợ đầy đủ âm báo khi bắt đầu nghe (`wake.wav`), âm báo chờ phản hồi (`thinking.wav`), giao diện **Popup sóng âm + chạy chữ câu hỏi/trả lời**, **Tile "Assistant"** và thanh trượt chỉnh âm lượng **Media Player** / công tắc **Microphone** trong mục *Settings → Extras*.
    - **Lưu ý quan trọng khi cấu hình**: Trong khối `packages:`, `core: !include packages/core.yaml` bắt buộc phải đặt ở dòng đầu tiên trước `audio:` để không ghi đè mất tập lệnh khởi tạo `BOOT_AUDIO`.
 
