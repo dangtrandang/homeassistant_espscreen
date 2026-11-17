@@ -38,6 +38,15 @@ substitutions:
   # Bổ sung đầy đủ bộ ký tự tiếng Việt có dấu cho toàn bộ font chữ trên màn hình
   SCRIPT_GLYPHS: "ẠẢẤẦẨẪẬẮẰẲẴẶẸẺẼẾỀỂỄỆỈỊỌỎỐỒỔỖỘƠỚỜỞỠỢỤỦỨỪỬỮỰỲỴỶỸạảấầẩẫậắằẳẵặẹẻẽếềểễệỉịọỏốồổỗộơớờởỡợụủứừửữựỳỵỷỹ₫"
 
+  # Thông số Audio chuẩn Tessera cho chip ES8311 trên Freenove FNK0104B
+  AUDIO_SAMPLE_RATE: "16000"
+  AUDIO_DOUT_PIN: GPIO8
+  AUDIO_DIN_PIN: GPIO6
+  AUDIO_DAC_DB_AT_0: "-95.5"
+  AUDIO_DAC_DB_AT_1: "32"
+  BOOT_BOARD_SETTINGS: |-
+    id(ts_microphone)->start();
+
 esphome:
   name: ${DEVICE_NAME}
   friendly_name: ${DEVICE_FRIENDLY_NAME}
@@ -95,18 +104,24 @@ logger:
 
 # Tích hợp trực tiếp các module chức năng từ thư mục local đã patch của Tessera
 packages:
+  core: !include packages/core.yaml
   build: !include packages/hardware/esp-idf.yaml
   look: !include packages/looks/compact.yaml
   touch: !include packages/features/capacitive-touch.yaml
   backlight: !include packages/features/backlight.yaml
   self_test: !include packages/features/self-test.yaml
-  core: !include packages/core.yaml
+  audio: !include packages/features/audio.yaml
+  voice_assist: !include tessera-plugins/voice_assist/plugin.yaml
 
 external_components:
   - source:
       type: local
       path: components
     components: [smart_display]
+  - source:
+      type: local
+      path: tessera-plugins/voice_assist/components
+    components: [voice_assist]
 
 # Cấu hình chân kết nối phần cứng Freenove ESP32-S3 2.8" (FNK0104)
 
@@ -145,7 +160,6 @@ display:
     dc_pin:
       number: GPIO46
       ignore_strapping_warning: true
-    reset_pin: GPIO4
     invert_colors: true
     data_rate: 40MHz
     update_interval: never
@@ -160,3 +174,37 @@ touchscreen:
     interrupt_pin: GPIO17
     reset_pin: GPIO18
     update_interval: 20ms
+
+# 6. Cụm âm thanh ES8311 (Mic + Loa) & Amplifier theo kiến trúc Tessera
+i2s_audio:
+  - id: ts_speaker_bus
+    i2s_bclk_pin: {number: GPIO5, allow_other_uses: true}
+    i2s_lrclk_pin: {number: GPIO7, allow_other_uses: true}
+  - id: ts_mic_bus
+    i2s_mclk_pin: GPIO4
+    i2s_bclk_pin: {number: GPIO5, allow_other_uses: true}
+    i2s_lrclk_pin: {number: GPIO7, allow_other_uses: true}
+
+speaker:
+  - id: !extend ts_speaker_out
+    i2s_mode: secondary
+
+audio_dac:
+  - platform: es8311
+    id: ts_audio_dac
+    i2c_id: touch_bus
+    address: 0x18
+    sample_rate: ${AUDIO_SAMPLE_RATE}
+    bits_per_sample: 16bit
+    use_mclk: true
+    use_microphone: false
+    mic_gain: 24DB
+
+switch:
+  - platform: gpio
+    id: board_speaker_amp
+    internal: true
+    pin:
+      number: GPIO1
+      inverted: true
+    restore_mode: ALWAYS_ON

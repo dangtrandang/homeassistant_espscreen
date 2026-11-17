@@ -8,28 +8,34 @@ Bản tùy biến nâng cao của [MaxGramser/homeassistant_espscreen](https://g
 
 1. **Hỗ trợ phần cứng Freenove ESP32-S3 2.8" (FNK0104)**:
    - Vi xử lý ESP32-S3 với **16MB Flash** và **8MB Octal PSRAM (80MHz)**, nâng giới hạn lên **128 tiles / 24 pages**.
-   - Cấu hình màn hình **ILI9341 IPS 240x320** qua SPI (`CLK: GPIO12`, `MOSI: GPIO11`, `CS: GPIO10`, `DC: GPIO46`, `RST: GPIO4`, `BL: GPIO45`) với `invert_colors: true` để hiển thị đúng dải màu trắng/đen của tấm nền IPS.
+   - Cấu hình màn hình **ILI9341 IPS 240x320** qua SPI (`CLK: GPIO12`, `MOSI: GPIO11`, `CS: GPIO10`, `DC: GPIO46`, `BL: GPIO45`, chân Reset dùng chung mạch `EN` của board để giải phóng `GPIO4` cho xung nhịp `I2S_MCLK`) với `invert_colors: true` để hiển thị đúng dải màu trắng/đen của tấm nền IPS.
    - Cảm ứng điện dung **FT6336 (ft63x6)** qua I2C (`SDA: GPIO16`, `SCL: GPIO15`, `INT: GPIO17`, `RST: GPIO18`).
 
-2. **Reverse TCP Tunnel xuyên CGNAT/Firewall (`tcp_tunnel.h`)**:
+2. **Tích hợp Audio Codec ES8311 & Plugin Voice Assistant (`voice_assist` v0.4.0) chính thức của Tessera**:
+   - Kích hoạt chip giải mã âm thanh **ES8311 (`0x18`)** trên bus I2C `touch_bus` (`SDA: GPIO16`, `SCL: GPIO15`), kết nối cả Microphone analog (`use_microphone: false`, `mic_gain: 24DB`, `DIN: GPIO6`) và Loa (`DOUT: GPIO8`) qua I2S (`MCLK: GPIO4`, `BCLK: GPIO5`, `LRCLK: GPIO7`) ở tần số `16000Hz`, cùng chân điều khiển Amply loa `AP_ENABLE` (`GPIO1`, tích cực mức `LOW` / `inverted: true`).
+   - Tích hợp plugin **`voice_assist`** của Tessera hỗ trợ nhận diện **Wake Word cục bộ ngay trên chip ESP32-S3 (`micro_wake_word`)** với 3 từ khóa: *"Okay Nabu"*, *"Hey Jarvis"*, *"Hey Mycroft"*.
+   - Hỗ trợ đầy đủ âm báo khi bắt đầu nghe (`wake.wav`), âm báo chờ phản hồi (`thinking.wav`), giao diện **Popup sóng âm + chạy chữ câu hỏi/trả lời**, **Tile "Assistant"** và thanh trượt chỉnh âm lượng **Media Player** / công tắc **Microphone** trong mục *Settings → Extras*.
+   - **Lưu ý quan trọng khi cấu hình**: Trong khối `packages:`, `core: !include packages/core.yaml` bắt buộc phải đặt ở dòng đầu tiên trước `audio:` để không ghi đè mất tập lệnh khởi tạo `BOOT_AUDIO`.
+
+3. **Reverse TCP Tunnel xuyên CGNAT/Firewall (`tcp_tunnel.h`)**:
    - Giải quyết triệt để vấn đề nhà mạng chặn gói tin UDP VPN (WireGuard) hoặc mạng LAN sau NAT không mở được port.
    - Mạch ESP32 chủ động mở kết nối Reverse TCP (`CTL` / `DAT`) lên Cloud VPS (`port 51821`), tự động nối cầu (bridge) cổng `127.0.0.1:6053` trên VPS về ESPHome API (`port 6053`) trên mạch.
 
-3. **Hỗ trợ đầy đủ Font chữ Tiếng Việt có dấu**:
+4. **Hỗ trợ đầy đủ Font chữ Tiếng Việt có dấu**:
    - Tích hợp trọn bộ ký tự Tiếng Việt có dấu (`SCRIPT_GLYPHS`) vào tất cả các cấp độ font chữ (`headline`, `watch_value`, `label`, `sublabel`, `sublabel_big`).
 
-4. **Sửa lỗi bật/tắt công tắc Tuya không phản hồi trạng thái (`components/smart_display/optimistic.h`)**:
+5. **Sửa lỗi bật/tắt công tắc Tuya không phản hồi trạng thái (`components/smart_display/optimistic.h`)**:
    - Nhiều thiết bị công tắc Tuya trên Home Assistant nhận lệnh `switch.turn_off` / `switch.turn_on` và thực thi thành công nhưng không đẩy sự kiện `state_changed` ngược về Home Assistant, khiến bản gốc tự động revert trạng thái nút về `'on'` sau 2 giây (dẫn đến chỉ tắt được mà không bật lại được).
    - Bản vá trong `optimistic::answer()` và `optimistic::tick()` giữ nguyên trạng thái mới ngay khi Home Assistant xác nhận dịch vụ thực thi thành công (`ok == true`), loại bỏ hiện tượng treo `Updating...` hoặc tự trả về trạng thái cũ.
 
-5. **Hạ thời gian chờ (Standby After) xuống tối thiểu `3 giây` & Chỉnh từng `1 giây`**:
+6. **Hạ thời gian chờ (Standby After) xuống tối thiểu `3 giây` & Chỉnh từng `1 giây`**:
    - Mở khóa giới hạn cứng `60s` của bản gốc xuống **`3s`** (`min_value: 3`, `step: 1`) trong `screen_settings.h`, `settings_screen.h`, `packages/core.yaml`, `screen_manager/app/core.py` và `web/src/model/settings.ts`.
    - Hỗ trợ tăng/giảm từng `1 giây` (`3s, 4s, 5s...`) ngay trong menu cài đặt trên màn hình hoặc từ Home Assistant.
 
-6. **Cuộn trang xoay vòng vô hạn (`1 → 2 → 3 → 1`) (`components/smart_display/page_protocol.h`)**:
+7. **Cuộn trang xoay vòng vô hạn (`1 → 2 → 3 → 1`) (`components/smart_display/page_protocol.h`)**:
    - Cập nhật hàm `Pages::step()` xoay vòng theo modulo tổng số trang, giúp 2 nút điều hướng `<` và `>` luôn hiển thị ở mọi trang: từ trang cuối bấm `>` về thẳng trang 1 và từ trang 1 bấm `<` sang thẳng trang cuối.
 
-7. **Đồng bộ thời gian chuẩn Việt Nam (`ICT-7`) qua Google NTP**:
+8. **Đồng bộ thời gian chuẩn Việt Nam (`ICT-7`) qua Google NTP**:
    - Tách riêng đồng hồ hệ thống theo máy chủ SNTP (`216.239.35.0`), ngăn `homeassistant_time` ghi đè giờ sai lệch múi giờ từ VPS.
 
 ---
@@ -38,7 +44,8 @@ Bản tùy biến nâng cao của [MaxGramser/homeassistant_espscreen](https://g
 
 | File / Thư mục | Mô tả |
 | :--- | :--- |
-| `tessera_freenove_28.yaml` | File cấu hình ESPHome hoàn chỉnh cho bo mạch Freenove ESP32-S3 2.8" (FNK0104). |
+| `tessera_freenove_28.yaml` | File cấu hình ESPHome hoàn chỉnh cho bo mạch Freenove ESP32-S3 2.8" (FNK0104) kèm Audio ES8311 & Voice Assistant. |
+| `tessera-plugins/voice_assist/` | Plugin Voice Assistant chính thức của Tessera (`micro_wake_word`, giao diện Popup sóng âm, `wake.wav` / `thinking.wav`). |
 | `tcp_tunnel.h` | Thư viện C++ Reverse TCP Tunnel chạy ngầm trên FreeRTOS kết nối ESP32 với VPS. |
 | `docker-compose-tessera.yaml` | File Docker Compose để chạy dịch vụ quản lý màn hình Tessera (`esp-screens`) trên VPS. |
 | `components/smart_display/optimistic.h` | Xử lý trạng thái Optimistic UI khi bật/tắt thiết bị (đã vá lỗi công tắc Tuya). |
