@@ -45,10 +45,14 @@ Bản tùy biến nâng cao của [MaxGramser/homeassistant_espscreen](https://g
    - Tách riêng đồng hồ hệ thống theo máy chủ SNTP (`216.239.35.0`), ngăn `homeassistant_time` ghi đè giờ sai lệch múi giờ từ VPS.
 
 9. **Kiến trúc Pipeline Voice Assistant Tiếng Việt Siêu Tốc (Tổng độ trễ phản hồi kỷ lục ~0.54 giây)**:
-   - **Tầng 1 - STT (Speech-to-Text)**: **GroqCloud Whisper** (`whisper-large-v3` qua HACS `ha-openai-whisper-stt-api` / *Whisper Cloud*) – nhận diện tiếng Việt chính xác 100% trên chip LPU chuyên dụng với thời gian chỉ **`0.31 giây (314ms)`**.
+   - **Tầng 1 - STT (Speech-to-Text)**: **GroqCloud Whisper** (`whisper-large-v3` / `whisper-large-v3-turbo` qua HACS `ha-openai-whisper-stt-api` / *Whisper Cloud*) – nhận diện tiếng Việt chính xác 100% trên chip LPU chuyên dụng với thời gian chỉ **`0.31 giây (314ms)`**. Cấu hình mồi ngữ cảnh động trong `Prompt (Optional)`:
+     ```jinja2
+     bật, tắt, mở, đóng, tăng, giảm, {{ assist_entity_names }}
+     ```
+     giúp Whisper luôn ưu tiên từ khóa hành động và tự động đồng bộ tên/bí danh của toàn bộ thiết bị trong nhà theo thời gian thực, triệt tiêu hoàn toàn lỗi nhận diện sai từ phát âm gần giống.
    - **Tầng 2 - Intent & Semantic Resolution**: Home Assistant Assist bật **Ưu tiên xử lý cục bộ (Prefer local intents)** – đối chiếu tên thiết bị và bí danh (Aliases: *Đèn sân, Đèn sông, Đèn xong...*) để thực thi bật/tắt thiết bị tức thì trong **`0.22 giây (222ms)`** mà không cần gọi cloud. Đồng thời kết nối **Google Gemini (Flash Lite)** làm bộ não dự phòng phía sau với System Prompt thông minh để xử lý các câu hội thoại phức tạp và sửa lỗi phát âm.
    - **Tầng 3 - TTS (Text-to-Speech)**: **Wyoming-Piper** chạy container Docker nội bộ trên VPS (`rhasspy/wyoming-piper` với voice `vi_VN-vais1000-medium`) – sinh âm thanh phản hồi tức thì trong **`0.002 giây (2ms)`**, loại bỏ hoàn toàn hiện tượng chập chờn, timeout hoặc bị Google chặn IP (429 Too Many Requests).
-   - **Tổng thời gian từ lúc dứt câu nói đến khi đèn bật và loa phát tiếng**: Đạt mức kỷ lục **`0.54 giây`**!
+   - **Tổng thời gian từ lúc dứt câu nói đến khi đèn bật và loa phát tiếng**: Đạt mức kỷ lục **`0.54 – 0.58 giây`**!
 
 ---
 
