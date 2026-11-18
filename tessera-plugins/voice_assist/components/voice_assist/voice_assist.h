@@ -105,6 +105,7 @@ class VoiceAssist : public Component, public tessera::Plugin {
   bool claim_wake_word_();
   bool wake_wanted_{false};  // the wake word should listen
   bool wake_holds_{false};   // and holds the microphone
+  bool session_holds_{false}; // holds the active assistant session audio claim
   // The popup: shown while it listens, thinks and answers, and closed a while after (close_at_).
   void popup_show_();
   void popup_update_();

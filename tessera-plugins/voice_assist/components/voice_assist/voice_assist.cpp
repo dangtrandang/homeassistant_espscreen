@@ -274,11 +274,14 @@ PopupView VoiceAssist::view() const {
 void VoiceAssist::on_wake() {
   session(true);
   listening_();
-  tessera::refresh();
   popup_update_();
 }
 
 void VoiceAssist::phase(Phase p) {
+  if (phase_ == p) {
+    popup_update_();
+    return;
+  }
   if (p == Phase::LISTENING) listening_();
   else phase_ = p;
   tessera::refresh();
@@ -383,20 +386,23 @@ void VoiceAssist::session(bool on) {
   using tessera::audio::Role;
   using tessera::audio::Side;
   if (on) {
+    if (session_holds_) return;
     // Explicitly pause/stop the wake word neural network to free CPU resources
     if (wake_word_ != nullptr && wake_word_->is_running()) {
       wake_word_->stop();
     }
     // The same claim as the wake word's (VOICE, 0) on the microphone, and the speaker beside it: music pauses and stays
     // paused (media waits for nothing), and a ring that takes either side stops the session.
-    const bool held = tessera::audio::claim(Side::BOTH, Role::VOICE, 0, [this]() {
+    session_holds_ = tessera::audio::claim(Side::BOTH, Role::VOICE, 0, [this]() {
+      session_holds_ = false;
       wake_holds_ = false;
       if (wake_word_ != nullptr && wake_word_->is_running()) wake_word_->stop();
       if (busy()) assistant_->request_stop();
     });
-    if (!held && busy()) assistant_->request_stop();
+    if (!session_holds_ && busy()) assistant_->request_stop();
     return;
   }
+  session_holds_ = false;
   tessera::audio::release(Side::OUT, Role::VOICE, 0);
   // The microphone stays the wake word's (its own answers back) while it should listen; otherwise it goes.
   if (wake_wanted_) {
@@ -426,7 +432,6 @@ void VoiceAssist::ask() {
   session(true);
   listening_();
   assistant_->request_start(false, true);
-  tessera::refresh();
   popup_update_();
 }
 
