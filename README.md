@@ -15,6 +15,10 @@ Bản tùy biến nâng cao của [MaxGramser/homeassistant_espscreen](https://g
    - Kích hoạt chip giải mã âm thanh **ES8311 (`0x18`)** trên bus I2C `touch_bus` (`SDA: GPIO16`, `SCL: GPIO15`, `frequency: 100kHz`), kết nối cả Microphone analog (`use_microphone: false`, `mic_gain: 36DB`, `DIN: GPIO6`) và Loa (`DOUT: GPIO8`) qua I2S (`MCLK: GPIO4`, `BCLK: GPIO5`, `LRCLK: GPIO7`) ở tần số `16000Hz`, cùng chân điều khiển Amply loa `AP_ENABLE` (`GPIO1`, tích cực mức `LOW` / `inverted: true`).
    - Tích hợp plugin **`voice_assist`** của Tessera hỗ trợ nhận diện **Wake Word cục bộ ngay trên chip ESP32-S3 (`micro_wake_word`)** với 3 từ khóa: *"Okay Nabu"*, *"Hey Jarvis"*, *"Hey Mycroft"*.
    - **Kích hoạt UI tức thì không độ trễ (Zero-Latency Local Trigger)**: Khi gọi Wake Word, hàm `on_wake()` lập tức đánh thức màn hình, phát âm chime và bật popup giao diện chỉ sau **~50–70ms**, hoàn toàn độc lập và không phải chờ phản hồi mạng từ Home Assistant.
+   - **Triệt tiêu hiện tượng nháy & quét màn hình khi mở/đóng popup (Seamless Partial Refresh)**:
+     - **Tối ưu Scrim trong suốt (`LV_OPA_TRANSP`)**: Lớp phủ nền `open->scrim` trên `lv_layer_top()` được đặt trong suốt (`LV_OPA_TRANSP`) thay vì phủ mờ 60% (`LV_OPA_60`). Nhờ đó, LVGL không bị ép đánh dấu bẩn (dirty) và render lại toàn bộ màn hình 320x240 (vốn làm bộ đệm 12% phải chia thành 8 dải quét liên tiếp trên bus SPI). Giờ đây, chỉ duy nhất vùng popup card (~258x178) được vẽ lại qua cơ chế Partial Update (CASET/PASET) của driver ILI9341, triệt tiêu hoàn toàn dải quét từ trên xuống dưới trong khi vẫn giữ nguyên trọn vẹn tính năng chạm ra ngoài vùng card (`popup_beside`) để đóng popup.
+     - **Loại bỏ làm mới Home không cần thiết**: Gỡ bỏ lời gọi `tessera::refresh()` trong `on_wake()` / `ask()`, ngăn chặn hệ thống ép vẽ lại toàn bộ các tile Home bên dưới khi popup chỉ phủ ở lớp trên (`lv_layer_top()`).
+     - **Đảm bảo tính Idempotent cho Voice Session**: Bổ sung cờ `session_holds_` và kiểm tra chuyển trạng thái `phase(LISTENING)`, ngăn chặn việc `on_wake()` cục bộ và sự kiện `on_listening` từ Home Assistant gọi kích hoạt popup 2 lần liên tiếp gây giật hình.
    - **Tối ưu độ nhạy Wake Word & Quản lý vòng đời thông minh (Lifecycle Management)**:
      - Hạ ngưỡng `probability_cutoff: 75%` (`sliding_window_size: 4`), loại bỏ bộ lọc VAD gây nuốt âm, giúp thiết bị bắt Wake Word chuẩn xác ngay từ lần gọi đầu tiên.
      - **Giải phóng CPU**: Khi bắt đầu phiên hội thoại, mô hình nhận diện Wake Word được tự động tạm dừng hoàn toàn (`STOPPED`) để giải phóng tài nguyên CPU/RAM cho việc thu âm microphone, truyền Wi-Fi và vẽ giao diện LVGL mượt mà.
@@ -73,6 +77,7 @@ Bản tùy biến nâng cao của [MaxGramser/homeassistant_espscreen](https://g
 | `tessera-plugins/voice_assist/` | Plugin Voice Assistant chính thức của Tessera (`micro_wake_word`, giao diện Popup sóng âm, `wake.wav` / `thinking.wav`). |
 | `tcp_tunnel.h` | Thư viện C++ Reverse TCP Tunnel chạy ngầm trên FreeRTOS kết nối ESP32 với VPS. |
 | `docker-compose-tessera.yaml` | File Docker Compose để chạy dịch vụ quản lý màn hình Tessera (`esp-screens`) trên VPS. |
+| `components/smart_display/plugin_host.cpp` | Quản lý vòng đời plugin và popup (`popup_show`, `popup_hide`, tối ưu scrim trong suốt triệt tiêu quét màn hình). |
 | `components/smart_display/optimistic.h` | Xử lý trạng thái Optimistic UI khi bật/tắt thiết bị (đã vá lỗi công tắc Tuya). |
 | `components/smart_display/page_protocol.h` | Điều hướng trang xoay vòng vô hạn (`1 → 2 → 3 → 1`). |
 | `components/smart_display/settings_screen.h` | Giao diện cài đặt trực tiếp trên màn hình cảm ứng (đã mở giới hạn Standby từ `3s`, bước nhảy `1s`). |

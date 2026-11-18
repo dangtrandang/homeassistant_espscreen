@@ -1217,7 +1217,7 @@ bool popup_show(const tessera::Plugin *plugin, std::function<tessera::Popup *()>
   lv_obj_set_size(open->scrim, lv_pct(100), lv_pct(100));
   lv_obj_remove_flag(open->scrim, LV_OBJ_FLAG_SCROLLABLE);
   lv_obj_add_flag(open->scrim, LV_OBJ_FLAG_CLICKABLE);
-  rt::set_number(open->scrim, LV_STYLE_BG_OPA, LV_OPA_60);  // the alert's scrim (alert_overlay: 60 %)
+  rt::set_number(open->scrim, LV_STYLE_BG_OPA, LV_OPA_TRANSP);  // transparent scrim: keeps click handling without full-screen redraw
   lv_obj_add_event_cb(open->scrim, popup_beside, LV_EVENT_SHORT_CLICKED, nullptr);
   // Under an alert that shows: the alert's overlay moves up one place.
   if (rt::alert_parts.card && lv_obj_is_visible(rt::alert_parts.card))
