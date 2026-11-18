@@ -11,24 +11,33 @@ Bản tùy biến nâng cao của [MaxGramser/homeassistant_espscreen](https://g
    - Cấu hình màn hình **ILI9341 IPS 240x320** qua SPI (`CLK: GPIO12`, `MOSI: GPIO11`, `CS: GPIO10`, `DC: GPIO46`, `BL: GPIO45`, chân Reset dùng chung mạch `EN` của board để giải phóng `GPIO4` cho xung nhịp `I2S_MCLK`) với `invert_colors: true` để hiển thị đúng dải màu trắng/đen của tấm nền IPS.
    - Cảm ứng điện dung **FT6336 (ft63x6)** qua I2C (`SDA: GPIO16`, `SCL: GPIO15`, `INT: GPIO17`, `RST: GPIO18`).
 
-2. **Tích hợp Audio Codec ES8311 & Plugin Voice Assistant (`voice_assist` v0.4.0) chính thức của Tessera**:
-   - Kích hoạt chip giải mã âm thanh **ES8311 (`0x18`)** trên bus I2C `touch_bus` (`SDA: GPIO16`, `SCL: GPIO15`), kết nối cả Microphone analog (`use_microphone: false`, `mic_gain: 36DB`, `DIN: GPIO6`) và Loa (`DOUT: GPIO8`) qua I2S (`MCLK: GPIO4`, `BCLK: GPIO5`, `LRCLK: GPIO7`) ở tần số `16000Hz`, cùng chân điều khiển Amply loa `AP_ENABLE` (`GPIO1`, tích cực mức `LOW` / `inverted: true`).
+2. **Tích hợp Audio Codec ES8311 & Trợ lý giọng nói Tiếng Việt ("Trợ lý Meow")**:
+   - Kích hoạt chip giải mã âm thanh **ES8311 (`0x18`)** trên bus I2C `touch_bus` (`SDA: GPIO16`, `SCL: GPIO15`, `frequency: 100kHz`), kết nối cả Microphone analog (`use_microphone: false`, `mic_gain: 36DB`, `DIN: GPIO6`) và Loa (`DOUT: GPIO8`) qua I2S (`MCLK: GPIO4`, `BCLK: GPIO5`, `LRCLK: GPIO7`) ở tần số `16000Hz`, cùng chân điều khiển Amply loa `AP_ENABLE` (`GPIO1`, tích cực mức `LOW` / `inverted: true`).
    - Tích hợp plugin **`voice_assist`** của Tessera hỗ trợ nhận diện **Wake Word cục bộ ngay trên chip ESP32-S3 (`micro_wake_word`)** với 3 từ khóa: *"Okay Nabu"*, *"Hey Jarvis"*, *"Hey Mycroft"*.
+   - **Kích hoạt UI tức thì không độ trễ (Zero-Latency Local Trigger)**: Khi gọi Wake Word, hàm `on_wake()` lập tức đánh thức màn hình, phát âm chime và bật popup giao diện chỉ sau **~50–70ms**, hoàn toàn độc lập và không phải chờ phản hồi mạng từ Home Assistant.
+   - **Tối ưu độ nhạy Wake Word & Quản lý vòng đời thông minh (Lifecycle Management)**:
+     - Hạ ngưỡng `probability_cutoff: 75%` (`sliding_window_size: 4`), loại bỏ bộ lọc VAD gây nuốt âm, giúp thiết bị bắt Wake Word chuẩn xác ngay từ lần gọi đầu tiên.
+     - **Giải phóng CPU**: Khi bắt đầu phiên hội thoại, mô hình nhận diện Wake Word được tự động tạm dừng hoàn toàn (`STOPPED`) để giải phóng tài nguyên CPU/RAM cho việc thu âm microphone, truyền Wi-Fi và vẽ giao diện LVGL mượt mà.
+     - **Tự động khôi phục tức thì**: Ngay khi phản hồi xong (`RESPONSE_FINISHED` / IDLE), hệ thống tự động đưa Wake Word trở lại trạng thái `DETECTING_WAKE_WORD` trong vài mili-giây mà không bị kẹt hay mất tác vụ.
+   - **Việt hóa toàn diện giao diện & cài đặt ("Trợ lý Meow")**:
+     - Đổi tên hiển thị chính thức thành **"Trợ lý Meow"**.
+     - Việt hóa toàn bộ trạng thái (*"Đang nghe…"*, *"Đang xử lý…"*, *"Đang trả lời…"*, *"Không thể thực hiện"*, *"Chạm để hỏi"*, *"Home Assistant vắng mặt"*) và các menu cài đặt (*Từ đánh thức, Cụm từ đánh thức, Âm thanh đánh thức, Âm thanh đang xử lý, Hiện popup, Hỏi ngay*).
+     - Giao diện Popup với hiệu ứng **Pulsing Glow Core** cho biểu tượng đĩa xoay trợ lý khi đang nghe và xử lý câu lệnh.
    - **Truyền nhận Audio TTS trực tiếp qua ESPHome API (`speaker: ts_speaker`)**: Âm thanh phản hồi từ Home Assistant được truyền dạng PCM stream qua API tunnel cổng 6053 thay vì tải file qua HTTP port 8123, hoạt động ổn định và xuyên suốt ngay cả khi port 8123 bị đóng hoặc VPN WireGuard offline.
-   - **Tối ưu hóa âm lượng và độ nhạy Micro**:
+   - **Tối ưu hóa âm lượng, ghi nhớ trạng thái & chống giật tiếng**:
      - Nâng độ nhạy micro `mic_gain: 36DB` (tăng gấp 4 lần so với mức mặc định 24dB) giúp bắt wake word chuẩn xác từ khoảng cách xa.
      - Mở rộng dải âm lượng phần cứng ES8311 (`AUDIO_VOLUME_DB_LOW: "-25"`, `AUDIO_VOLUME_DB_HIGH: "20"`), khuếch đại gain phần cứng lên đến `+20dB`.
-     - Tự động thiết lập âm lượng khởi động ở mức `85%`.
+     - **Tự động lưu và khôi phục âm lượng**: Lưu mức âm lượng vào bộ nhớ flash NVS mỗi khi người dùng thay đổi, tự khôi phục mức cũ hoặc mặc định `60%` khi khởi động lại.
+     - Nâng bộ đệm phát âm thanh `buffer_duration: 500ms`, triệt tiêu hoàn toàn hiện tượng ngắt quãng tiếng khi phát TTS.
      - Chuẩn hóa tần số lấy mẫu file âm thanh hệ thống `wake.wav` và `thinking.wav` về đúng chuẩn `16000Hz` đồng thời boost biên độ cực đại (~98% full-scale), triệt tiêu hoàn toàn hiện tượng lệch sample rate làm TTS nói nhanh/méo tiếng.
-   - Hỗ trợ đầy đủ âm báo khi bắt đầu nghe (`wake.wav`), âm báo chờ phản hồi (`thinking.wav`), giao diện **Popup sóng âm + chạy chữ câu hỏi/trả lời**, **Tile "Assistant"** và thanh trượt chỉnh âm lượng **Media Player** / công tắc **Microphone** trong mục *Settings → Extras*.
    - **Lưu ý quan trọng khi cấu hình**: Trong khối `packages:`, `core: !include packages/core.yaml` bắt buộc phải đặt ở dòng đầu tiên trước `audio:` để không ghi đè mất tập lệnh khởi tạo `BOOT_AUDIO`.
 
 3. **Reverse TCP Tunnel xuyên CGNAT/Firewall (`tcp_tunnel.h`)**:
    - Giải quyết triệt để vấn đề nhà mạng chặn gói tin UDP VPN (WireGuard) hoặc mạng LAN sau NAT không mở được port.
    - Mạch ESP32 chủ động mở kết nối Reverse TCP (`CTL` / `DAT`) lên Cloud VPS (`port 51821`), tự động nối cầu (bridge) cổng `127.0.0.1:6053` trên VPS về ESPHome API (`port 6053`) trên mạch.
 
-4. **Hỗ trợ đầy đủ Font chữ Tiếng Việt có dấu**:
-   - Tích hợp trọn bộ ký tự Tiếng Việt có dấu (`SCRIPT_GLYPHS`) vào tất cả các cấp độ font chữ (`headline`, `watch_value`, `label`, `sublabel`, `sublabel_big`).
+4. **Hỗ trợ đầy đủ Font chữ Tiếng Việt có dấu (Bao gồm vần Ư và chữ hoa/thường)**:
+   - Tích hợp trọn bộ ký tự Tiếng Việt có dấu đầy đủ (`SCRIPT_GLYPHS` bao gồm cả các ký tự `Ư, Ứ, Ừ, Ử, Ữ, Ự`, `ư, ứ, ừ, ử, ữ, ự` và các nguyên âm có dấu) vào tất cả các cấp độ font chữ (`headline`, `watch_value`, `label`, `sublabel`, `sublabel_big`), loại bỏ hoàn toàn lỗi hiển thị ô vuông hoặc mất ký tự.
 
 5. **Sửa lỗi bật/tắt công tắc Tuya không phản hồi trạng thái (`components/smart_display/optimistic.h`)**:
    - Nhiều thiết bị công tắc Tuya trên Home Assistant nhận lệnh `switch.turn_off` / `switch.turn_on` và thực thi thành công nhưng không đẩy sự kiện `state_changed` ngược về Home Assistant, khiến bản gốc tự động revert trạng thái nút về `'on'` sau 2 giây (dẫn đến chỉ tắt được mà không bật lại được).

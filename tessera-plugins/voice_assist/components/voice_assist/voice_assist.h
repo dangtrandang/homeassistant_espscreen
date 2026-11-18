@@ -45,6 +45,7 @@ class VoiceAssist : public Component, public tessera::Plugin {
   void set_thinking_sound(tessera::Sound s) { thinking_sound_ = s; }
 
   // From plugin.yaml's triggers.
+  void on_wake();
   void phase(Phase p);
   void heard(const std::string &text);
   void answer(const std::string &text);
@@ -67,6 +68,7 @@ class VoiceAssist : public Component, public tessera::Plugin {
   // A tap on the tile, or Ask on the settings page: ask now, or stop what runs.
   void ask();
   void stop();
+  void wake_screen() { tessera::wake(this); }
   bool busy() const { return assistant_ != nullptr && assistant_->is_running(); }
 
   // What the tile and the top bar show.

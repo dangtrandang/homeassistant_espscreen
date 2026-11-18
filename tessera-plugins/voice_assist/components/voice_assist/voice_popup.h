@@ -60,6 +60,11 @@ class VoicePopup : public tessera::Popup {
     lv_obj_set_style_border_width(arc_, ui::px(large ? 4 : 3), 0);
     lv_obj_set_style_border_side(arc_, LV_BORDER_SIDE_TOP, 0);
     fill_ = circle(c.parent, disc_, at);
+    const int core_size = std::max(8, disc_ * 6 / 10);
+    core_ = circle(fill_, core_size, (disc_ - core_size) / 2);
+    lv_obj_set_style_bg_color(core_, lv_color_white(), 0);
+    lv_obj_set_style_radius(core_, LV_RADIUS_CIRCLE, 0);
+    lv_obj_add_flag(core_, LV_OBJ_FLAG_HIDDEN);
     icon_ = ui::label(fill_, Font::ICON_SMALL, theme::ON_ACCENT);
     lv_obj_set_width(icon_, disc_);
     lv_obj_set_style_text_align(icon_, LV_TEXT_ALIGN_CENTER, 0);
@@ -188,6 +193,14 @@ class VoicePopup : public tessera::Popup {
       if (listening) ui::animate(ripples_[i], Motion::RIPPLE, 1600, i * 800);
       else ui::still(ripples_[i]);
     }
+    hide(core_, !listening);
+    if (listening) {
+      ui::animate(core_, Motion::PULSE, 1200);
+      ui::animate(fill_, Motion::PULSE, 1600);
+    } else {
+      ui::still(core_);
+      ui::still(fill_);
+    }
     hide(arc_, !thinking);
     if (thinking) ui::animate(arc_, Motion::SPIN, 900);
     else ui::still(arc_);
@@ -196,7 +209,7 @@ class VoicePopup : public tessera::Popup {
       if (thinking) ui::animate(dots_[i], Motion::PULSE, 1200, i * 200);
       else ui::still(dots_[i]);
     }
-    hide(icon_, thinking);
+    hide(icon_, thinking || listening);
     hide(ring_, !answering);
     if (answering) ui::animate(ring_, Motion::PULSE, 2400);
     else ui::still(ring_);
@@ -209,7 +222,7 @@ class VoicePopup : public tessera::Popup {
   tessera::Tone tone_ = tessera::Tone::NORMAL;
   uint32_t icon_code_ = 0;
   tessera::Text said_text_, word_text_;
-  lv_obj_t *ripples_[2]{}, *ring_{}, *arc_{}, *fill_{}, *icon_{}, *dots_[3]{}, *word_{}, *heard_{}, *box_{}, *said_{};
+  lv_obj_t *ripples_[2]{}, *ring_{}, *arc_{}, *fill_{}, *core_{}, *icon_{}, *dots_[3]{}, *word_{}, *heard_{}, *box_{}, *said_{};
 };
 
 }  // namespace esphome::voice_assist

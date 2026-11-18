@@ -21,9 +21,9 @@ static constexpr uint32_t REPLY_SHOWN_MS = 20000;
 static constexpr uint32_t POPUP_AFTER_MS = 30000, POPUP_EMPTY_MS = 2000;
 // The pace of the words in the popup: about that of Home Assistant's voices (Piper, Home Assistant Cloud), in
 // characters a second. The whole answer shows once the speaker is done.
-static constexpr uint32_t SPOKEN_CHARS_PER_S = 15;
+static constexpr uint32_t SPOKEN_CHARS_PER_S = 32;
 // How long after the answer went to the speaker its words start anyway, when the media player never says it plays.
-static constexpr uint32_t HEARD_AFTER_MS = 1500;
+static constexpr uint32_t HEARD_AFTER_MS = 250;
 static bool is_on(switch_::Switch *s) { return s == nullptr || s->state; }
 
 // The tile: the assistant's icon, what it does now, and under it what it heard or answered. A tap asks, or stops.
@@ -130,6 +130,7 @@ void VoiceAssist::on_ready() {
   // The phrase Wake phrase kept over the restart listens; the others rest.
   auto index = wake_phrase_ != nullptr ? wake_phrase_->active_index() : optional<size_t>{};
   choose_phrase(index.has_value() ? *index : 0);
+  if (is_on(wake_word_on_)) listen(true);
 }
 
 bool VoiceAssist::settings(tessera::SettingsPage &page) {
@@ -158,11 +159,12 @@ bool VoiceAssist::settings(tessera::SettingsPage &page) {
 }
 
 void VoiceAssist::loop() {
+  const uint32_t now = millis();
+
   // While Assist thinks: the thinking sound again as soon as the last one went to the speaker, so its own length sets
   // the rhythm and nothing is cut off. The player hands the speaker what it takes, never waiting.
   if (phase_ == Phase::THINKING && is_on(thinking_sound_on_) && !sounds_.playing()) sounds_.play(thinking_sound_);
   sounds_.loop();
-  const uint32_t now = millis();
   // The answer is heard once the media player announces it (it buffers first), or a moment after it went there.
   if (speak_asked_ && !speak_from_) {
     const bool playing = media_player_ != nullptr && media_player_->state == media_player::MEDIA_PLAYER_STATE_ANNOUNCING;
@@ -175,8 +177,14 @@ void VoiceAssist::loop() {
   // announcement finished, after the pipeline's own end).
   if (phase_ == Phase::ANSWERING && !busy()) {
     phase_ = Phase::IDLE;
+    session(false);
+    tessera::wake(this);
     tessera::refresh();
     popup_update_();
+  }
+  // Ensure wake word is running whenever in idle state
+  if (phase_ == Phase::IDLE && wake_wanted_ && !busy() && wake_holds_ && wake_word_ != nullptr && !wake_word_->is_running()) {
+    wake_word_->start();
   }
   if (popup_ != nullptr && !busy() && phase_ != Phase::LISTENING && !close_at_)
     close_at_ = now + (answer_.empty() && phase_ != Phase::FAILED ? POPUP_EMPTY_MS : POPUP_AFTER_MS);
@@ -184,10 +192,12 @@ void VoiceAssist::loop() {
     popup_ = nullptr;
     close_at_ = 0;
     tessera::close_popup(this);
+    tessera::wake(this);
   }
 }
 
 void VoiceAssist::listening_() {
+  tessera::wake(this);
   if (phase_ != Phase::LISTENING && is_on(wake_sound_on_)) sounds_.play(wake_sound_);
   phase_ = Phase::LISTENING;
   heard_.clear();
@@ -215,6 +225,7 @@ void VoiceAssist::popup_show_() {
                                 popup_ = nullptr;
                                 close_at_ = 0;
                                 tessera::close_popup(this);
+                                tessera::wake(this);
                               }
                             },
                             // It went by itself (a tap beside it, an alert, standby, an update): what runs stops too.
@@ -222,6 +233,7 @@ void VoiceAssist::popup_show_() {
                               popup_ = nullptr;
                               close_at_ = 0;
                               stop();
+                              tessera::wake(this);
                             });
     return popup_;
   });
@@ -252,10 +264,18 @@ PopupView VoiceAssist::view() const {
   v.icon = phase_ == Phase::IDLE ? ICON_ASSISTANT : phase_icon();
   v.tone = phase_ == Phase::FAILED ? tessera::Tone::ALERT : phase_ == Phase::THINKING ? tessera::Tone::BUSY
                                                                                        : tessera::Tone::ACCENT;
-  v.word = phase_ == Phase::IDLE ? std::string(text("name")) : phase_word();
+  const char *name_str = text("name");
+  v.word = phase_ == Phase::IDLE ? (name_str && *name_str ? std::string(name_str) : "Trợ lý Meow") : phase_word();
   v.heard = heard_;
   v.said = said_();
   return v;
+}
+
+void VoiceAssist::on_wake() {
+  session(true);
+  listening_();
+  tessera::refresh();
+  popup_update_();
 }
 
 void VoiceAssist::phase(Phase p) {
@@ -298,7 +318,11 @@ void VoiceAssist::speaking(const std::string &url) {
 void VoiceAssist::ended() {
   // A question that came to nothing (nothing heard, "never mind") ends here; a spoken answer ends in loop(), once the
   // speaker is done with it, and a failure stays as it is.
-  if (phase_ == Phase::LISTENING || phase_ == Phase::THINKING) phase_ = Phase::IDLE;
+  if (phase_ == Phase::LISTENING || phase_ == Phase::THINKING) {
+    phase_ = Phase::IDLE;
+    session(false);
+  }
+  tessera::wake(this);
   tessera::refresh();
   popup_update_();
 }
@@ -309,6 +333,7 @@ void VoiceAssist::failed(const std::string &code, const std::string &message) {
   answered_at_ = millis();
   phase_ = Phase::FAILED;
   speak_asked_ = speak_from_ = 0;
+  session(false);
   tessera::refresh();
   popup_update_();
 }
@@ -329,11 +354,11 @@ bool VoiceAssist::claim_wake_word_() {
       Side::IN, Role::VOICE, 0,
       [this]() {
         wake_holds_ = false;
-        wake_word_->stop();
+        if (wake_word_ != nullptr && wake_word_->is_running()) wake_word_->stop();
       },
       [this]() {
         wake_holds_ = true;
-        if (wake_wanted_) wake_word_->start();
+        if (wake_wanted_ && !busy() && wake_word_ != nullptr && !wake_word_->is_running()) wake_word_->start();
       });
   return wake_holds_;
 }
@@ -344,10 +369,12 @@ void VoiceAssist::listen(bool on) {
   wake_wanted_ = on;
   if (wake_word_ == nullptr) return;
   if (on) {
-    if (claim_wake_word_()) wake_word_->start();
+    if (claim_wake_word_()) {
+      if (!busy() && wake_word_ != nullptr && !wake_word_->is_running()) wake_word_->start();
+    }
     return;
   }
-  wake_word_->stop();
+  if (wake_word_->is_running()) wake_word_->stop();
   if (!busy()) tessera::audio::release(Side::IN, Role::VOICE, 0);
   wake_holds_ = false;
 }
@@ -356,11 +383,15 @@ void VoiceAssist::session(bool on) {
   using tessera::audio::Role;
   using tessera::audio::Side;
   if (on) {
+    // Explicitly pause/stop the wake word neural network to free CPU resources
+    if (wake_word_ != nullptr && wake_word_->is_running()) {
+      wake_word_->stop();
+    }
     // The same claim as the wake word's (VOICE, 0) on the microphone, and the speaker beside it: music pauses and stays
     // paused (media waits for nothing), and a ring that takes either side stops the session.
     const bool held = tessera::audio::claim(Side::BOTH, Role::VOICE, 0, [this]() {
       wake_holds_ = false;
-      if (wake_word_ != nullptr) wake_word_->stop();
+      if (wake_word_ != nullptr && wake_word_->is_running()) wake_word_->stop();
       if (busy()) assistant_->request_stop();
     });
     if (!held && busy()) assistant_->request_stop();
@@ -368,15 +399,22 @@ void VoiceAssist::session(bool on) {
   }
   tessera::audio::release(Side::OUT, Role::VOICE, 0);
   // The microphone stays the wake word's (its own answers back) while it should listen; otherwise it goes.
-  if (wake_wanted_) claim_wake_word_();
-  else tessera::audio::release(Side::IN, Role::VOICE, 0);
+  if (wake_wanted_) {
+    claim_wake_word_();
+    if (wake_holds_ && !busy() && wake_word_ != nullptr && !wake_word_->is_running()) {
+      wake_word_->start();
+    }
+  } else {
+    tessera::audio::release(Side::IN, Role::VOICE, 0);
+  }
 }
 
 void VoiceAssist::on_interval(uint32_t) {
   // A wake word refused the microphone (a ring had it) listens again once nobody above it holds it.
   if (wake_wanted_ && !wake_holds_ && !busy() &&
-      tessera::audio::open(tessera::audio::Side::IN, tessera::audio::Role::VOICE) && claim_wake_word_())
-    wake_word_->start();
+      tessera::audio::open(tessera::audio::Side::IN, tessera::audio::Role::VOICE) && claim_wake_word_()) {
+    if (!busy() && wake_word_ != nullptr && !wake_word_->is_running()) wake_word_->start();
+  }
 }
 
 void VoiceAssist::ask() {
@@ -385,6 +423,7 @@ void VoiceAssist::ask() {
     assistant_->request_stop();
     return;
   }
+  session(true);
   listening_();
   assistant_->request_start(false, true);
   tessera::refresh();
@@ -393,6 +432,7 @@ void VoiceAssist::ask() {
 
 void VoiceAssist::stop() {
   if (busy()) assistant_->request_stop();
+  session(false);
 }
 
 bool VoiceAssist::reply_fresh() const {
@@ -400,10 +440,16 @@ bool VoiceAssist::reply_fresh() const {
 }
 
 std::string VoiceAssist::idle_line() const {
-  if (api::global_api_server == nullptr || !api::global_api_server->is_connected()) return text("away");
-  if (wake_word_on_ != nullptr && wake_word_on_->state && wake_phrase_ != nullptr && wake_phrase_->has_state())
-    return tessera::fill(text("say_phrase"), "phrase", std::string(wake_phrase_->current_option()));
-  return text("tap_to_ask");
+  if (api::global_api_server == nullptr || !api::global_api_server->is_connected()) {
+    const char *t = text("away");
+    return (t && *t) ? t : "Home Assistant vắng mặt";
+  }
+  if (wake_word_on_ != nullptr && wake_word_on_->state && wake_phrase_ != nullptr && wake_phrase_->has_state()) {
+    const char *t = text("say_phrase");
+    return tessera::fill((t && *t) ? t : "Nói “{phrase}”", "phrase", std::string(wake_phrase_->current_option()));
+  }
+  const char *t = text("tap_to_ask");
+  return (t && *t) ? t : "Chạm để hỏi";
 }
 
 uint32_t VoiceAssist::phase_icon() const {
@@ -430,10 +476,22 @@ std::string VoiceAssist::phase_word() const {
   // A failure that is no longer fresh is quiet again.
   if (phase_ == Phase::FAILED && !reply_fresh()) return idle_line();
   switch (phase_) {
-    case Phase::LISTENING: return text("listening");
-    case Phase::THINKING: return text("thinking");
-    case Phase::ANSWERING: return text("answering");
-    case Phase::FAILED: return text("failed");
+    case Phase::LISTENING: {
+      const char *t = text("listening");
+      return (t && *t) ? t : "Đang nghe…";
+    }
+    case Phase::THINKING: {
+      const char *t = text("thinking");
+      return (t && *t) ? t : "Đang xử lý…";
+    }
+    case Phase::ANSWERING: {
+      const char *t = text("answering");
+      return (t && *t) ? t : "Đang trả lời…";
+    }
+    case Phase::FAILED: {
+      const char *t = text("failed");
+      return (t && *t) ? t : "Không thể thực hiện";
+    }
     default: return idle_line();
   }
 }

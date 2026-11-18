@@ -36,7 +36,7 @@ substitutions:
   AUTO_DIM_TIMEOUT: "3"
 
   # Bổ sung đầy đủ bộ ký tự tiếng Việt có dấu cho toàn bộ font chữ trên màn hình
-  SCRIPT_GLYPHS: "ẠẢẤẦẨẪẬẮẰẲẴẶẸẺẼẾỀỂỄỆỈỊỌỎỐỒỔỖỘƠỚỜỞỠỢỤỦỨỪỬỮỰỲỴỶỸạảấầẩẫậắằẳẵặẹẻẽếềểễệỉịọỏốồổỗộơớờởỡợụủứừửữựỳỵỷỹ₫"
+  SCRIPT_GLYPHS: "ẢẠẮẰẲẴẶẤẦẨẪẬảạắằẳẵặấầẩẫậẺẼẸẾỀỂỄỆẻẽẹếềểễệỈĨỊỉĩịỎỌỐỒỔỖỘƠỚỜỞỠỢỏọốồổỗộơớờởỡợỦŨỤƯỨỪỬỮỰủũụưứừửữựỲỶỸỴỳỷỹỵ₫"
 
   # Thông số Audio chuẩn Tessera cho chip ES8311 trên Freenove FNK0104B
   AUDIO_SAMPLE_RATE: "16000"
@@ -48,7 +48,15 @@ substitutions:
   AUDIO_VOLUME_DB_HIGH: "20"
   BOOT_BOARD_SETTINGS: |-
     id(ts_microphone)->start();
-    id(ts_media_player).make_call().set_volume(0.85f).perform();
+    float vol = id(saved_volume);
+    if (vol < 0.05f || vol > 1.0f) vol = 0.6f;
+    id(ts_media_player).make_call().set_volume(vol).perform();
+
+globals:
+  - id: saved_volume
+    type: float
+    restore_value: yes
+    initial_value: '0.6'
 
 esphome:
   name: ${DEVICE_NAME}
@@ -63,6 +71,12 @@ esphome:
           esphome::homeassistant::global_homeassistant_time = nullptr;
           id(homeassistant_time).stop_poller();
           tcp_tunnel::start_tcp_tunnel();
+          id(ts_media_player).add_on_state_callback([](auto) {
+            float v = id(ts_media_player).volume;
+            if (v >= 0.05f && v <= 1.0f && std::fabs(v - id(saved_volume)) > 0.01f) {
+              id(saved_volume) = v;
+            }
+          });
 
 esp32:
   board: esp32-s3-devkitc-1
@@ -140,6 +154,7 @@ i2c:
   sda: GPIO16
   scl: GPIO15
   scan: true
+  frequency: 100kHz
 
 # 3. Đèn nền màn hình (Backlight PWM qua GPIO45)
 output:
@@ -191,6 +206,7 @@ i2s_audio:
 speaker:
   - id: !extend ts_speaker_out
     i2s_mode: secondary
+    buffer_duration: 500ms
 
 audio_dac:
   - platform: es8311

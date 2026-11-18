@@ -12,12 +12,18 @@ micro_wake_word:
   models:
     - model: okay_nabu
       id: va_okay_nabu
+      probability_cutoff: 75%
+      sliding_window_size: 4
     - model: hey_jarvis
       id: va_hey_jarvis
+      probability_cutoff: 75%
+      sliding_window_size: 4
     - model: hey_mycroft
       id: va_hey_mycroft
-  vad:
+      probability_cutoff: 75%
+      sliding_window_size: 4
   on_wake_word_detected:
+    - lambda: 'id(va_plugin).on_wake();'
     - voice_assistant.start:
         wake_word: !lambda return wake_word;
 
@@ -28,12 +34,12 @@ voice_assistant:
   microphone:
     microphone: ts_microphone
     channels: 0
-  speaker: ts_speaker
+  speaker: ts_announcement_input
   micro_wake_word: va_wake
   use_wake_word: false
   noise_suppression_level: 2
   auto_gain: 31dBFS
-  volume_multiplier: 2.0
+  volume_multiplier: 1.0
   # The wake word and a session go through the screen's audio owner (plugin API 0.19): listen() and session() claim the
   # microphone and the speaker as the voice, and a doorbell's ring takes them (components/voice_assist).
   on_client_connected:
@@ -43,9 +49,9 @@ voice_assistant:
         then:
           - lambda: 'id(va_plugin).listen(true);'
   on_client_disconnected:
-    - lambda: 'id(va_assistant)->request_stop(); id(va_plugin).listen(false);'
+    - lambda: 'id(va_assistant)->request_stop();'
   on_listening:
-    - lambda: 'id(va_plugin).session(true); id(va_plugin).phase(esphome::voice_assist::Phase::LISTENING);'
+    - lambda: 'id(va_plugin).wake_screen(); id(va_plugin).session(true); id(va_plugin).phase(esphome::voice_assist::Phase::LISTENING);'
   on_stt_vad_end:
     - lambda: 'id(va_plugin).phase(esphome::voice_assist::Phase::THINKING);'
   on_stt_end:
@@ -59,7 +65,7 @@ voice_assistant:
   on_tts_end:
     - lambda: 'id(va_plugin).speaking(x);'
   on_end:
-    - lambda: 'id(va_plugin).ended(); id(va_plugin).session(false);'
+    - lambda: 'id(va_plugin).ended(); id(va_plugin).wake_screen();'
   on_error:
     - lambda: 'id(va_plugin).failed(code, message);'
 
@@ -67,7 +73,7 @@ voice_assistant:
 switch:
   - platform: template
     id: va_wake_word
-    name: "Wake word"
+    name: "Từ đánh thức"
     icon: mdi:account-voice
     optimistic: true
     restore_mode: RESTORE_DEFAULT_ON
@@ -83,14 +89,14 @@ switch:
   # Its two sounds on the screen's speaker: when it starts to listen, and a plop again and again while Assist thinks.
   - platform: template
     id: va_wake_sound
-    name: "Wake sound"
+    name: "Âm thanh đánh thức"
     icon: mdi:bell-ring
     optimistic: true
     restore_mode: RESTORE_DEFAULT_ON
     entity_category: config
   - platform: template
     id: va_thinking_sound
-    name: "Thinking sound"
+    name: "Âm thanh đang xử lý"
     icon: mdi:timer-sand
     optimistic: true
     restore_mode: RESTORE_DEFAULT_ON
@@ -99,7 +105,7 @@ switch:
   # The popup of a question over the screen (plugin API 0.18): what it heard and the answer as it is spoken.
   - platform: template
     id: va_show_popup
-    name: "Show popup"
+    name: "Hiện popup"
     icon: mdi:message-text
     optimistic: true
     restore_mode: RESTORE_DEFAULT_ON
@@ -110,7 +116,7 @@ switch:
 select:
   - platform: template
     id: va_wake_phrase
-    name: "Wake phrase"
+    name: "Cụm từ đánh thức"
     icon: mdi:chat-processing
     optimistic: true
     restore_value: true
