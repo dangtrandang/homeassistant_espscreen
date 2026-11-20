@@ -6,6 +6,7 @@
 #include "esphome/core/component.h"
 #include "esphome/components/media_player/media_player.h"
 #include "esphome/components/micro_wake_word/micro_wake_word.h"
+#include "esphome/components/number/number.h"
 #include "esphome/components/select/select.h"
 #include "esphome/components/switch/switch.h"
 #include "esphome/components/voice_assistant/voice_assistant.h"
@@ -33,6 +34,8 @@ class VoiceAssist : public Component, public tessera::Plugin {
   void set_wake_word(micro_wake_word::MicroWakeWord *w) { wake_word_ = w; }
   void set_wake_word_on(switch_::Switch *s) { wake_word_on_ = s; }
   void set_wake_phrase(select::Select *s) { wake_phrase_ = s; }
+  void set_wake_cutoff(number::Number *n) { wake_cutoff_ = n; }
+  void set_mic_gain(select::Select *s) { mic_gain_ = s; }
   void add_phrase(micro_wake_word::WakeWordModel *m) { phrases_.push_back(m); }
   void set_speaker(speaker::Speaker *s) { sounds_.set_speaker(s); }
   void set_media_player(media_player::MediaPlayer *m) { media_player_ = m; }
@@ -57,6 +60,8 @@ class VoiceAssist : public Component, public tessera::Plugin {
   void failed(const std::string &code, const std::string &message);
   // Wake phrase chose its option `index`: that model listens, the others rest.
   void choose_phrase(size_t index);
+  // Adjust probability cutoff (%) live for all wake word models.
+  void set_cutoff(float pct);
 
   // The microphone and the speaker through the screen's audio owner (plugin API 0.19, tessera::audio, the role VOICE):
   // the wake word holds the microphone while it listens, and a session holds the speaker too, so music pauses for it and
@@ -92,6 +97,8 @@ class VoiceAssist : public Component, public tessera::Plugin {
   micro_wake_word::MicroWakeWord *wake_word_{};
   switch_::Switch *wake_word_on_{};
   select::Select *wake_phrase_{};
+  number::Number *wake_cutoff_{};
+  select::Select *mic_gain_{};
   std::vector<micro_wake_word::WakeWordModel *> phrases_;
   switch_::Switch *wake_sound_on_{}, *thinking_sound_on_{}, *show_popup_on_{};
   tessera::Sound wake_sound_, thinking_sound_;

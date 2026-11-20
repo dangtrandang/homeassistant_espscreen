@@ -12,24 +12,28 @@ Bản tùy biến nâng cao của [MaxGramser/homeassistant_espscreen](https://g
    - Cảm ứng điện dung **FT6336 (ft63x6)** qua I2C (`SDA: GPIO16`, `SCL: GPIO15`, `INT: GPIO17`, `RST: GPIO18`).
 
 2. **Tích hợp Audio Codec ES8311 & Trợ lý giọng nói Tiếng Việt ("Trợ lý Meow")**:
-   - Kích hoạt chip giải mã âm thanh **ES8311 (`0x18`)** trên bus I2C `touch_bus` (`SDA: GPIO16`, `SCL: GPIO15`, `frequency: 100kHz`), kết nối cả Microphone analog (`use_microphone: false`, `mic_gain: 36DB`, `DIN: GPIO6`) và Loa (`DOUT: GPIO8`) qua I2S (`MCLK: GPIO4`, `BCLK: GPIO5`, `LRCLK: GPIO7`) ở tần số `16000Hz`, cùng chân điều khiển Amply loa `AP_ENABLE` (`GPIO1`, tích cực mức `LOW` / `inverted: true`).
+   - Kích hoạt chip giải mã âm thanh **ES8311 (`0x18`)** trên bus I2C `touch_bus` (`SDA: GPIO16`, `SCL: GPIO15`, `frequency: 100kHz`), kết nối cả Microphone analog (`use_microphone: false`, `mic_gain: 30DB` mặc định — có thể đổi live `18–36 dB`, `DIN: GPIO6`) và Loa (`DOUT: GPIO8`) qua I2S (`MCLK: GPIO4`, `BCLK: GPIO5`, `LRCLK: GPIO7`) ở tần số `16000Hz`, cùng chân điều khiển Amply loa `AP_ENABLE` (`GPIO1`, tích cực mức `LOW` / `inverted: true`).
    - Tích hợp plugin **`voice_assist`** của Tessera hỗ trợ nhận diện **Wake Word cục bộ ngay trên chip ESP32-S3 (`micro_wake_word`)** với 3 từ khóa: *"Okay Nabu"*, *"Hey Jarvis"*, *"Hey Mycroft"*.
    - **Kích hoạt UI tức thì không độ trễ (Zero-Latency Local Trigger)**: Khi gọi Wake Word, hàm `on_wake()` lập tức đánh thức màn hình, phát âm chime và bật popup giao diện chỉ sau **~50–70ms**, hoàn toàn độc lập và không phải chờ phản hồi mạng từ Home Assistant.
    - **Triệt tiêu hiện tượng nháy & quét màn hình khi mở/đóng popup (Seamless Partial Refresh)**:
      - **Tối ưu Scrim trong suốt (`LV_OPA_TRANSP`)**: Lớp phủ nền `open->scrim` trên `lv_layer_top()` được đặt trong suốt (`LV_OPA_TRANSP`) thay vì phủ mờ 60% (`LV_OPA_60`). Nhờ đó, LVGL không bị ép đánh dấu bẩn (dirty) và render lại toàn bộ màn hình 320x240 (vốn làm bộ đệm 12% phải chia thành 8 dải quét liên tiếp trên bus SPI). Giờ đây, chỉ duy nhất vùng popup card (~258x178) được vẽ lại qua cơ chế Partial Update (CASET/PASET) của driver ILI9341, triệt tiêu hoàn toàn dải quét từ trên xuống dưới trong khi vẫn giữ nguyên trọn vẹn tính năng chạm ra ngoài vùng card (`popup_beside`) để đóng popup.
      - **Loại bỏ làm mới Home không cần thiết**: Gỡ bỏ lời gọi `tessera::refresh()` trong `on_wake()` / `ask()`, ngăn chặn hệ thống ép vẽ lại toàn bộ các tile Home bên dưới khi popup chỉ phủ ở lớp trên (`lv_layer_top()`).
      - **Đảm bảo tính Idempotent cho Voice Session**: Bổ sung cờ `session_holds_` và kiểm tra chuyển trạng thái `phase(LISTENING)`, ngăn chặn việc `on_wake()` cục bộ và sự kiện `on_listening` từ Home Assistant gọi kích hoạt popup 2 lần liên tiếp gây giật hình.
-   - **Tối ưu độ nhạy Wake Word & Quản lý vòng đời thông minh (Lifecycle Management)**:
-     - Hạ ngưỡng `probability_cutoff: 75%` (`sliding_window_size: 4`), loại bỏ bộ lọc VAD gây nuốt âm, giúp thiết bị bắt Wake Word chuẩn xác ngay từ lần gọi đầu tiên.
+   - **Tối ưu độ nhạy Wake Word, chống kích hoạt nhầm & Cân chỉnh Live (Lifecycle & Live Tuning)**:
+     - Bật bộ lọc `VAD` (`probability_cutoff: 35%`) kết hợp `sliding_window_size: 5` và ngưỡng mặc định `86%` (`Okay Nabu` / `Hey Jarvis`) / `85%` (`Hey Mycroft`), triệt tiêu tình trạng tự wake nhầm trong hội thoại bình thường nhưng vẫn bắt tốt từ khoảng cách ~3m.
+     - Tối ưu luồng âm thanh gửi lên STT tiếng Việt: `noise_suppression_level: 1`, `auto_gain: 31dBFS`, `volume_multiplier: 2.0`.
+     - **Chỉnh độ nhạy trực tiếp trong Cài đặt (không cần build/OTA lại)**: Bổ sung 2 mục chỉnh thời gian thực trong **Cài đặt → Trợ lý Meow** (hiện trên cả màn hình cảm ứng lẫn Home Assistant, tự lưu vào Flash NVS):
+       - **Ngưỡng đánh thức (`75%` – `99%`, bước `1%`)**: gọi trực tiếp `set_probability_cutoff()` cho các model `micro_wake_word`, áp dụng ngay lập tức.
+       - **Khuếch đại micro (`18 dB` / `24 dB` / `30 dB` / `36 dB`)**: ghi trực tiếp thanh ghi ADC gain (`0x16`) của chip `ES8311` qua I2C theo thời gian thực.
      - **Giải phóng CPU**: Khi bắt đầu phiên hội thoại, mô hình nhận diện Wake Word được tự động tạm dừng hoàn toàn (`STOPPED`) để giải phóng tài nguyên CPU/RAM cho việc thu âm microphone, truyền Wi-Fi và vẽ giao diện LVGL mượt mà.
      - **Tự động khôi phục tức thì**: Ngay khi phản hồi xong (`RESPONSE_FINISHED` / IDLE), hệ thống tự động đưa Wake Word trở lại trạng thái `DETECTING_WAKE_WORD` trong vài mili-giây mà không bị kẹt hay mất tác vụ.
    - **Việt hóa toàn diện giao diện & cài đặt ("Trợ lý Meow")**:
      - Đổi tên hiển thị chính thức thành **"Trợ lý Meow"**.
-     - Việt hóa toàn bộ trạng thái (*"Đang nghe…"*, *"Đang xử lý…"*, *"Đang trả lời…"*, *"Không thể thực hiện"*, *"Chạm để hỏi"*, *"Home Assistant vắng mặt"*) và các menu cài đặt (*Từ đánh thức, Cụm từ đánh thức, Âm thanh đánh thức, Âm thanh đang xử lý, Hiện popup, Hỏi ngay*).
+     - Việt hóa toàn bộ trạng thái (*"Đang nghe…"*, *"Đang xử lý…"*, *"Đang trả lời…"*, *"Không thể thực hiện"*, *"Chạm để hỏi"*, *"Home Assistant vắng mặt"*) và các menu cài đặt (*Từ đánh thức, Cụm từ đánh thức, Ngưỡng đánh thức, Khuếch đại micro, Âm thanh đánh thức, Âm thanh đang xử lý, Hiện popup, Hỏi ngay*).
      - Giao diện Popup với hiệu ứng **Pulsing Glow Core** cho biểu tượng đĩa xoay trợ lý khi đang nghe và xử lý câu lệnh.
    - **Truyền nhận Audio TTS trực tiếp qua ESPHome API (`speaker: ts_speaker`)**: Âm thanh phản hồi từ Home Assistant được truyền dạng PCM stream qua API tunnel cổng 6053 thay vì tải file qua HTTP port 8123, hoạt động ổn định và xuyên suốt ngay cả khi port 8123 bị đóng hoặc VPN WireGuard offline.
    - **Tối ưu hóa âm lượng, ghi nhớ trạng thái & chống giật tiếng**:
-     - Nâng độ nhạy micro `mic_gain: 36DB` (tăng gấp 4 lần so với mức mặc định 24dB) giúp bắt wake word chuẩn xác từ khoảng cách xa.
+     - Đặt độ nhạy micro mặc định `mic_gain: 30DB` (cân bằng giữa thu xa 3m và tránh vỡ tiếng/clipping), có thể đổi trực tiếp `18 / 24 / 30 / 36 dB` ngay trong Cài đặt.
      - Mở rộng dải âm lượng phần cứng ES8311 (`AUDIO_VOLUME_DB_LOW: "-25"`, `AUDIO_VOLUME_DB_HIGH: "20"`), khuếch đại gain phần cứng lên đến `+20dB`.
      - **Tự động lưu và khôi phục âm lượng**: Lưu mức âm lượng vào bộ nhớ flash NVS mỗi khi người dùng thay đổi, tự khôi phục mức cũ hoặc mặc định `60%` khi khởi động lại.
      - Nâng bộ đệm phát âm thanh `buffer_duration: 500ms`, triệt tiêu hoàn toàn hiện tượng ngắt quãng tiếng khi phát TTS.
@@ -207,5 +211,6 @@ services:
 - **Mở nhanh menu Cài đặt trên màn hình (On-screen Settings)**: Nhấn giữ vào thanh tiêu đề phía trên cùng (khoảng giữa biểu tượng góc trái và đồng hồ góc phải) trong **1 giây**.
   - Vào **Brightness** → **Standby after** để chỉnh thời gian tắt/chờ màn hình (`3s, 4s, 5s...`).
   - Vào **Brightness** → **Dark mode** để bật/tắt giao diện nền tối.
+  - Vào **Trợ lý Meow** → **Ngưỡng đánh thức** (`75%–99%`) và **Khuếch đại micro** (`18–36 dB`) để tinh chỉnh độ nhạy wake word ngay lập tức mà không cần nạp lại firmware.
 - **Nhảy nhanh về Trang 1**: Bấm vào biểu tượng góc trên cùng bên trái hoặc vuốt từ cạnh dưới màn hình lên.
 - **Mở bảng chọn trang nhanh (Dock)**: Bấm vào số trang `1 / 3` ở chính giữa cạnh dưới cùng.

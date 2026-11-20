@@ -11,7 +11,7 @@ from pathlib import Path
 
 import esphome.codegen as cg
 import esphome.config_validation as cv
-from esphome.components import media_player, micro_wake_word, select, smart_display, speaker, switch, voice_assistant
+from esphome.components import media_player, micro_wake_word, number, select, smart_display, speaker, switch, voice_assistant
 from esphome.const import CONF_ID
 
 DEPENDENCIES = ["smart_display", "voice_assistant", "micro_wake_word"]
@@ -20,6 +20,8 @@ CONF_ASSISTANT = "assistant"
 CONF_WAKE_WORD = "wake_word"
 CONF_WAKE_WORD_ON = "wake_word_on"
 CONF_WAKE_PHRASE = "wake_phrase"
+CONF_WAKE_CUTOFF = "wake_cutoff"
+CONF_MIC_GAIN = "mic_gain"
 CONF_PHRASES = "phrases"
 CONF_SPEAKER = "speaker"
 CONF_MEDIA_PLAYER = "media_player"
@@ -46,6 +48,8 @@ CONFIG_SCHEMA = cv.All(cv.Schema(
         cv.Required(CONF_WAKE_WORD): cv.use_id(micro_wake_word.MicroWakeWord),
         cv.Required(CONF_WAKE_WORD_ON): cv.use_id(switch.Switch),
         cv.Required(CONF_WAKE_PHRASE): cv.use_id(select.Select),
+        cv.Optional(CONF_WAKE_CUTOFF): cv.use_id(number.Number),
+        cv.Optional(CONF_MIC_GAIN): cv.use_id(select.Select),
         # The wake word models in the order of Wake phrase's options.
         cv.Required(CONF_PHRASES): cv.All(cv.ensure_list(cv.use_id(micro_wake_word.WakeWordModel)), cv.Length(min=1)),
         # The speaker its sounds play on, and the two settings that turn them off.
@@ -68,6 +72,10 @@ async def to_code(config):
     cg.add(var.set_wake_word(await cg.get_variable(config[CONF_WAKE_WORD])))
     cg.add(var.set_wake_word_on(await cg.get_variable(config[CONF_WAKE_WORD_ON])))
     cg.add(var.set_wake_phrase(await cg.get_variable(config[CONF_WAKE_PHRASE])))
+    if CONF_WAKE_CUTOFF in config:
+        cg.add(var.set_wake_cutoff(await cg.get_variable(config[CONF_WAKE_CUTOFF])))
+    if CONF_MIC_GAIN in config:
+        cg.add(var.set_mic_gain(await cg.get_variable(config[CONF_MIC_GAIN])))
     for phrase in config[CONF_PHRASES]:
         cg.add(var.add_phrase(await cg.get_variable(phrase)))
     cg.add(var.set_speaker(await cg.get_variable(config[CONF_SPEAKER])))

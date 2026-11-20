@@ -1,18 +1,18 @@
 # ==============================================================================
 # Tessera (homeassistant_espscreen) Configuration for Freenove ESP32-S3 2.8" Touch
-# Board: Freenove FNK0104 (2.8 inch Capacitive Touch - ILI9341 IPS + FT6336)
+# Board: Freenove FNK0104 (2.8 inch Capacitive Touch - ILI9341 + FT6336)
 # ==============================================================================
 
 substitutions:
   DEVICE_NAME: "freenove-28-screen"
   DEVICE_FRIENDLY_NAME: "Freenove 2.8 Screen"
   GITHUB_REF: "main"
-  FONT_DIR: "https://raw.githubusercontent.com/dangtrandang/homeassistant_espscreen/${GITHUB_REF}/fonts"
+  FONT_DIR: "https://raw.githubusercontent.com/MaxGramser/homeassistant_espscreen/${GITHUB_REF}/fonts"
 
   # Đặt BOARD_ID là "cyd" để Tessera Screen Manager nhận diện đúng kích thước màn hình 2.8" (320x240 / 240x320)
   BOARD_ID: "cyd"
 
-  # Thông số màn hình vật lý 2.8" ILI9341 IPS
+  # Thông số màn hình vật lý 2.8" ILI9341
   PANEL_W: "240"
   PANEL_H: "320"
   DISPLAY_DPI: "143"
@@ -35,7 +35,7 @@ substitutions:
   BACKLIGHT_FREQUENCY: "20000Hz"
   AUTO_DIM_TIMEOUT: "3"
 
-  # Bổ sung đầy đủ bộ ký tự tiếng Việt có dấu cho toàn bộ font chữ trên màn hình
+  # Bổ sung đầy đủ toàn bộ bảng chữ cái tiếng Việt có dấu cho toàn bộ font chữ trên màn hình
   SCRIPT_GLYPHS: "ẢẠẮẰẲẴẶẤẦẨẪẬảạắằẳẵặấầẩẫậẺẼẸẾỀỂỄỆẻẽẹếềểễệỈĨỊỉĩịỎỌỐỒỔỖỘƠỚỜỞỠỢỏọốồổỗộơớờởỡợỦŨỤƯỨỪỬỮỰủũụưứừửữựỲỶỸỴỳỷỹỵ₫"
 
   # Thông số Audio chuẩn Tessera cho chip ES8311 trên Freenove FNK0104B
@@ -90,8 +90,8 @@ psram:
   speed: 80MHz
 
 wifi:
-  ssid: !secret wifi_ssid
-  password: !secret wifi_password
+  ssid: "Tho Con"
+  password: "19072015"
   manual_ip:
     static_ip: 192.168.1.200
     gateway: 192.168.1.1
@@ -119,28 +119,47 @@ time:
 logger:
   level: DEBUG
 
+wireguard:
+  time_id: sntp_time
+  address: 10.8.0.2
+  netmask: 255.255.255.0
+  private_key: "6Jrk0Y0Npo0yqnV8hlXrSb6cfnBGGXZxvf04H9wj83E="
+  peer_endpoint: "180.93.36.132"
+  peer_port: 4500
+  peer_public_key: "Cv4Pz1G2k0hhprnT2MYLobWPjeXrxs8Q8BraM9czjxU="
+  peer_preshared_key: "LtNmYiBI5xMEIC4Yor8qy0zDpuaZJka8XdLVLjNbVSs="
+  peer_allowed_ips:
+    - 10.8.0.0/24
+  peer_persistent_keepalive: 25s
+  reboot_timeout: 0s
+
+binary_sensor:
+  - platform: wireguard
+    status:
+      name: "WireGuard Status"
+
 # Tích hợp trực tiếp các module chức năng từ thư mục local đã patch của Tessera
 packages:
-  core: !include packages/core.yaml
-  build: !include packages/hardware/esp-idf.yaml
-  look: !include packages/looks/compact.yaml
-  touch: !include packages/features/capacitive-touch.yaml
-  backlight: !include packages/features/backlight.yaml
-  self_test: !include packages/features/self-test.yaml
-  audio: !include packages/features/audio.yaml
+  core: !include .esphome/packages/da5e1664/packages/core.yaml
+  build: !include .esphome/packages/da5e1664/packages/hardware/esp-idf.yaml
+  look: !include .esphome/packages/da5e1664/packages/looks/compact.yaml
+  touch: !include .esphome/packages/da5e1664/packages/features/capacitive-touch.yaml
+  backlight: !include .esphome/packages/da5e1664/packages/features/backlight.yaml
+  self_test: !include .esphome/packages/da5e1664/packages/features/self-test.yaml
+  audio: !include .esphome/packages/da5e1664/packages/features/audio.yaml
   voice_assist: !include tessera-plugins/voice_assist/plugin.yaml
 
 external_components:
   - source:
       type: local
-      path: components
+      path: .esphome/packages/da5e1664/components
     components: [smart_display]
   - source:
       type: local
       path: tessera-plugins/voice_assist/components
     components: [voice_assist]
 
-# Cấu hình chân kết nối phần cứng Freenove ESP32-S3 2.8" (FNK0104)
+# Cấu hình chân kết nối phần cứng Freenove ESP32-S3 2.8"
 
 # 1. SPI Bus cho màn hình LCD
 spi:
@@ -165,7 +184,7 @@ output:
     id: gpio_backlight_pwm
     frequency: ${BACKLIGHT_FREQUENCY}
 
-# 4. Màn hình ILI9341 IPS 240x320
+# 4. Màn hình ILI9341 240x320
 display:
   - platform: mipi_spi
     id: my_display
@@ -217,7 +236,7 @@ audio_dac:
     bits_per_sample: 16bit
     use_mclk: true
     use_microphone: false
-    mic_gain: 36DB
+    mic_gain: 30DB
 
 switch:
   - platform: gpio

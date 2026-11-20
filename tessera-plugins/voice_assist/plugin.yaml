@@ -9,19 +9,21 @@ micro_wake_word:
     microphone: ts_microphone
     channels: 0
   stop_after_detection: false
+  vad:
+    probability_cutoff: 35%
   models:
     - model: okay_nabu
       id: va_okay_nabu
-      probability_cutoff: 75%
-      sliding_window_size: 4
+      probability_cutoff: 86%
+      sliding_window_size: 5
     - model: hey_jarvis
       id: va_hey_jarvis
-      probability_cutoff: 75%
-      sliding_window_size: 4
+      probability_cutoff: 86%
+      sliding_window_size: 5
     - model: hey_mycroft
       id: va_hey_mycroft
-      probability_cutoff: 75%
-      sliding_window_size: 4
+      probability_cutoff: 85%
+      sliding_window_size: 5
   on_wake_word_detected:
     - lambda: 'id(va_plugin).on_wake();'
     - voice_assistant.start:
@@ -37,9 +39,9 @@ voice_assistant:
   speaker: ts_announcement_input
   micro_wake_word: va_wake
   use_wake_word: false
-  noise_suppression_level: 2
+  noise_suppression_level: 1
   auto_gain: 31dBFS
-  volume_multiplier: 1.0
+  volume_multiplier: 2.0
   # The wake word and a session go through the screen's audio owner (plugin API 0.19): listen() and session() claim the
   # microphone and the speaker as the voice, and a doorbell's ring takes them (components/voice_assist).
   on_client_connected:
@@ -125,6 +127,38 @@ select:
     entity_category: config
     on_value:
       - lambda: 'id(va_plugin).choose_phrase(i);'
+  - platform: template
+    id: va_mic_gain
+    name: "Khuếch đại micro"
+    icon: mdi:microphone-settings
+    optimistic: true
+    restore_value: true
+    options: ["18 dB", "24 dB", "30 dB", "36 dB"]
+    initial_option: "30 dB"
+    entity_category: config
+    on_value:
+      - lambda: |-
+          static constexpr uint8_t regs[] = {3, 4, 5, 6};
+          if (i < 4) {
+            id(ts_audio_dac)->write_byte(0x16, regs[i]);
+            ESP_LOGI("voice_assist", "ES8311 mic gain set to %s (reg 0x16 = %u)", x.c_str(), regs[i]);
+          }
+
+number:
+  - platform: template
+    id: va_wake_cutoff
+    name: "Ngưỡng đánh thức"
+    icon: mdi:tune-vertical
+    optimistic: true
+    restore_value: true
+    initial_value: 86
+    min_value: 75
+    max_value: 99
+    step: 1
+    unit_of_measurement: "%"
+    entity_category: config
+    on_value:
+      - lambda: 'id(va_plugin).set_cutoff(x);'
 
 voice_assist:
   id: va_plugin
@@ -132,6 +166,8 @@ voice_assist:
   wake_word: va_wake
   wake_word_on: va_wake_word
   wake_phrase: va_wake_phrase
+  wake_cutoff: va_wake_cutoff
+  mic_gain: va_mic_gain
   phrases: [va_okay_nabu, va_hey_jarvis, va_hey_mycroft]
   speaker: ts_speaker
   media_player: ts_media_player

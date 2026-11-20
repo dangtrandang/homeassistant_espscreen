@@ -1,5 +1,6 @@
 #include "voice_assist.h"
 
+#include <cmath>
 #include "esphome/components/api/api_server.h"
 #include "esphome/core/hal.h"
 
@@ -130,6 +131,13 @@ void VoiceAssist::on_ready() {
   // The phrase Wake phrase kept over the restart listens; the others rest.
   auto index = wake_phrase_ != nullptr ? wake_phrase_->active_index() : optional<size_t>{};
   choose_phrase(index.has_value() ? *index : 0);
+  if (wake_cutoff_ != nullptr && wake_cutoff_->has_state()) {
+    set_cutoff(wake_cutoff_->state);
+  }
+  if (mic_gain_ != nullptr) {
+    auto gidx = mic_gain_->active_index();
+    if (gidx.has_value()) mic_gain_->make_call().set_index(*gidx).perform();
+  }
   if (is_on(wake_word_on_)) listen(true);
 }
 
@@ -143,6 +151,18 @@ bool VoiceAssist::settings(tessera::SettingsPage &page) {
     page.choice(text("wake_phrase"), options,
                 [this] { auto index = wake_phrase_->active_index(); return index.has_value() ? (int) *index : 0; },
                 [this](int index) { wake_phrase_->make_call().set_index((size_t) index).perform(); });
+  }
+  if (wake_cutoff_ != nullptr) {
+    page.number("Ngưỡng đánh thức", 75, 99, 1, "%",
+                [this] { return wake_cutoff_->has_state() ? (int) std::lround(wake_cutoff_->state) : 86; },
+                [this](int v) { wake_cutoff_->make_call().set_value((float) v).perform(); });
+  }
+  if (mic_gain_ != nullptr) {
+    std::vector<std::string> gains;
+    for (size_t i = 0; i < mic_gain_->size(); ++i) gains.emplace_back(mic_gain_->option_at(i));
+    page.choice("Khuếch đại micro", gains,
+                [this] { auto idx = mic_gain_->active_index(); return idx.has_value() ? (int) *idx : 2; },
+                [this](int idx) { mic_gain_->make_call().set_index((size_t) idx).perform(); });
   }
   page.toggle(text("wake_sound"), [this] { return is_on(wake_sound_on_); },
               [this](bool on) { if (wake_sound_on_ != nullptr) on ? wake_sound_on_->turn_on() : wake_sound_on_->turn_off(); });
@@ -347,6 +367,16 @@ void VoiceAssist::choose_phrase(size_t index) {
     else phrases_[i]->disable();
   }
   tessera::refresh();
+}
+
+void VoiceAssist::set_cutoff(float pct) {
+  if (pct < 50.0f) pct = 50.0f;
+  if (pct > 99.0f) pct = 99.0f;
+  const uint8_t cutoff = static_cast<uint8_t>(std::lround(pct * 255.0f / 100.0f));
+  for (auto *m : phrases_) {
+    if (m != nullptr) m->set_probability_cutoff(cutoff);
+  }
+  ESP_LOGI("voice_assist", "Wake word probability cutoff set to %.0f%% (%u/255)", pct, cutoff);
 }
 
 bool VoiceAssist::claim_wake_word_() {
