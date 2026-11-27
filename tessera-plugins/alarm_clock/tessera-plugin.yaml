@@ -5,7 +5,7 @@ icon: alarm
 maintainer: local
 license: MIT
 stage: beta
-topics: [clock]
+topics: [time]
 requires:
   esphome: 2026.9.0
   psram: true
@@ -22,7 +22,7 @@ tiles:
     example: tile_example
 
 cards:
-  - { id: manager, title: name }
+  - { id: manager, name: name, wide: true }
 
 bar_items:
-  - { id: next, label: name, icon: alarm }
+  - { id: next, label: name, icon: alarm, example: bar_example }
