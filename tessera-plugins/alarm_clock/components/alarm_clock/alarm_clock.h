@@ -135,6 +135,7 @@ class AlarmClock : public Component, public tessera::Plugin {
   void stop_audio_and_release_();
   void show_popup_();
   void close_popup_();
+  tessera::BarItem bar_item_next_() const;
   void feed_audio_(uint32_t now_ms);
   AlarmEntry *find_by_id_(uint8_t id, bool include_deleted = false);
   const AlarmEntry *find_by_id_(uint8_t id, bool include_deleted = false) const;

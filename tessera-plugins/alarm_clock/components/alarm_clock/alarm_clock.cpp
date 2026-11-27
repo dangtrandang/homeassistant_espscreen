@@ -53,6 +53,7 @@ void AlarmClock::setup() {
         return new AlarmManagerCard(std::move(ops));
       },
       true);
+  add_bar_item("next", [this]() { return bar_item_next_(); });
   ESP_LOGI(TAG, "AlarmClock initialized (NVS key=0x%08X, max=%u, wav=%u bytes @ %u Hz)",
            static_cast<unsigned>(ALARM_NVS_HASH), static_cast<unsigned>(MAX_ALARMS),
            static_cast<unsigned>(alarm_sound_.length), static_cast<unsigned>(alarm_sound_.rate));
@@ -148,7 +149,89 @@ uint32_t AlarmClock::current_epoch_() const {
 
 void AlarmClock::notify_changed_() {
   ++store_rev_;
+  tessera::refresh();
   publish_snapshot();
+}
+
+tessera::BarItem AlarmClock::bar_item_next_() const {
+  tessera::BarItem item;
+  if (time_ == nullptr) return item;
+  const auto now = time_->now();
+  if (!now.is_valid()) return item;
+
+  static constexpr uint32_t ICON_ALARM = 0xF0020;  // MDI alarm
+  char hhmm[8];
+
+  // 1. Ringing: show active alarm time in ALERT tone.
+  if (state_ == AlarmState::RINGING) {
+    const AlarmEntry *a = find_by_id_(active_alarm_id_);
+    if (a != nullptr) {
+      std::snprintf(hhmm, sizeof(hhmm), "%02u:%02u", a->hour, a->minute);
+      item.shown = true;
+      item.icon = ICON_BELL_RING;
+      item.text = hhmm;
+      item.tone = tessera::Tone::ALERT;
+      return item;
+    }
+  }
+
+  // 2. Snoozed: prioritize actual snooze target time in BUSY tone (distinct from original schedule).
+  if (state_ == AlarmState::SNOOZED && snooze_until_epoch_ > 0) {
+    const auto st = ESPTime::from_epoch_local(snooze_until_epoch_);
+    std::snprintf(hhmm, sizeof(hhmm), "%02u:%02u", st.hour, st.minute);
+    item.shown = true;
+    item.icon = ICON_ALARM;
+    item.text = hhmm;
+    item.tone = tessera::Tone::BUSY;
+    return item;
+  }
+
+  // 3. Nearest upcoming enabled alarm in ICT local time (respecting weekday repeat_days).
+  const uint32_t epoch = static_cast<uint32_t>(now.timestamp);
+  const uint32_t cur_min = epoch / 60UL;
+  const int now_min_of_day = now.hour * 60 + now.minute;
+  int best_delta_min = 8 * 1440;
+  const AlarmEntry *best = nullptr;
+
+  for (const auto &a : store_.alarms) {
+    if (a.id == 0 || a.deleted != 0 || !a.enabled) continue;
+    const int a_min = a.hour * 60 + a.minute;
+    int delta_days = -1;
+
+    if (a.repeat_days == 0) {
+      // One-shot alarm: today if still ahead, otherwise tomorrow.
+      const bool passed_today = (a_min < now_min_of_day) ||
+                                (a_min == now_min_of_day && (now.second > 0 || a.last_fired_minute == cur_min));
+      delta_days = passed_today ? 1 : 0;
+    } else {
+      for (int d = 0; d <= 7; ++d) {
+        const uint8_t dow = static_cast<uint8_t>(((now.day_of_week - 1 + d) % 7) + 1);
+        if (!matches_weekday_(a.repeat_days, dow)) continue;
+        if (d == 0) {
+          const bool passed_today = (a_min < now_min_of_day) ||
+                                    (a_min == now_min_of_day && (now.second > 0 || a.last_fired_minute == cur_min));
+          if (passed_today) continue;
+        }
+        delta_days = d;
+        break;
+      }
+    }
+
+    if (delta_days < 0) continue;
+    const int delta_min = delta_days * 1440 + a_min - now_min_of_day;
+    if (delta_min < best_delta_min) {
+      best_delta_min = delta_min;
+      best = &a;
+    }
+  }
+
+  if (best == nullptr) return item;
+  std::snprintf(hhmm, sizeof(hhmm), "%02u:%02u", best->hour, best->minute);
+  item.shown = true;
+  item.icon = ICON_ALARM;
+  item.text = hhmm;
+  item.tone = tessera::Tone::ACCENT;
+  return item;
 }
 
 void AlarmClock::publish_snapshot() {

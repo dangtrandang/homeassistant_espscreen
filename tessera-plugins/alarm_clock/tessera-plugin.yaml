@@ -15,3 +15,6 @@ flash_kb: 112
 
 cards:
   - { id: manager, title: name }
+
+bar_items:
+  - { id: next, label: name, icon: alarm }

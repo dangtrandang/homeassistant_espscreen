@@ -9840,16 +9840,40 @@ inline const header_bar::Bar *shown_bar() {
   return model.configured && index >= 0 && static_cast<size_t>(index) < model.page_data.records.size()
        ? &model.page_data.records[index].bar : nullptr;
 }
+// Auto-inject plugin:alarm_clock.next into the rendered top bar when active and not already placed by Screen Manager.
+inline header_bar::Bar effective_bar(const header_bar::Bar &base) {
+  header_bar::Bar out = base;
+  if (!out.received || !header_bar::plugin_item) return out;
+  static const char *const kAlarmBarKey = "plugin:alarm_clock.next";
+  for (size_t i = 0; i < out.count; ++i) {
+    if (out.items[i].kind == header_bar::Kind::plugin && out.items[i].text == kAlarmBarKey) {
+      return out;  // Already placed by Screen Manager: never duplicate.
+    }
+  }
+  if (out.count >= header_bar::MAX_ITEMS) return out;
+  const auto probe = header_bar::plugin_item(kAlarmBarKey);
+  if (!probe.shown) return out;
+  // Insert before existing items (to the left of the clock) without mutating Screen Manager's stored bar.
+  for (size_t i = out.count; i > 0; --i) out.items[i] = out.items[i - 1];
+  header_bar::Item alarm_item;
+  alarm_item.kind = header_bar::Kind::plugin;
+  alarm_item.text = kAlarmBarKey;
+  alarm_item.card = header_bar::NO_CARD;
+  out.items[0] = std::move(alarm_item);
+  ++out.count;
+  return out;
+}
 inline page_header::Renderer header_renderer;
 inline void draw_header(bool live) {
   const int index = shown_page ? *shown_page : 0;
   const auto *record = model.configured && index >= 0 && static_cast<size_t>(index) < model.page_data.records.size()
                      ? &model.page_data.records[index] : nullptr;
   const header_bar::Bar empty;
+  const header_bar::Bar bar = effective_bar(record ? record->bar : empty);
   using page_header::Leading;
   const auto leading = !record ? Leading::none : header_back() ? Leading::back
                      : record->home_control && settings_screen::home_button ? Leading::home : Leading::none;
-  page_header::View view{record ? record->bar : empty, header_name, now_time ? now_time() : esphome::ESPTime{},
+  page_header::View view{bar, header_name, now_time ? now_time() : esphome::ESPTime{},
                          now_epoch(), leading, live, screen_settings::current.clock_24h != 0, header_device()};
   header_renderer.draw({room_label, time_label, tile_grid, settings_screen::hold_area,
                         header_text_font, header_icon_font, header_home_mark, header_back_font, header_status_font},
@@ -9872,18 +9896,20 @@ inline void render_header() {
   // there opens its card instead of switching. Its tile is one on a page or a tile of the top bar (Tile::BAR_TILE), and
   // an unavailable entity opens nothing, as its tile does.
   header_renderer.on_item([](size_t item) {
-    const auto *bar = shown_bar();
+    const auto *raw = shown_bar();
+    if (!raw) return;
+    const auto bar = effective_bar(*raw);
 #ifdef SD_MOD_DOORBELL
     // A missed ring (module doorbell) opens that ring's view again.
-    if (bar && item < bar->count && bar->items[item].card == header_bar::DOORBELL_CARD) {
+    if (item < bar.count && bar.items[item].card == header_bar::DOORBELL_CARD) {
       if (allowed(esphome::millis(), 14, "header doorbell")) doorbell::reopen();
       return;
     }
 #endif
-    if (!bar || item >= bar->count || bar->items[item].card >= model.count || !fresh()) return;
-    const auto &tile = model.tiles[bar->items[item].card];
+    if (item >= bar.count || bar.items[item].card >= model.count || !fresh()) return;
+    const auto &tile = model.tiles[bar.items[item].card];
     if (!tile.received || !tile.available() || !allowed(esphome::millis(), 14, "header item")) return;
-    hold_card(bar->items[item].card);
+    hold_card(bar.items[item].card);
   });
   draw_header(ha_connected() && feed_alive());
 }
@@ -10812,17 +10838,18 @@ inline void tick() {
   }
   // The Wi-Fi item follows the signal (firmware 0.38.0) and the battery item its level and charging (firmware 0.41.0):
   // looked at every five seconds, drawn when what one of them says changes.
-  if(const auto *bar=shown_bar()){
+  if(const auto *raw_bar=shown_bar()){
     static uint32_t looked=0;
     static std::string said;
     if(esphome::millis()-looked>5000){
       looked=esphome::millis();
+      const auto bar=effective_bar(*raw_bar);
       const auto device=header_device();
       std::string now_said;
-      for(size_t i=0;i<bar->count;++i){
-        const auto kind=bar->items[i].kind;
+      for(size_t i=0;i<bar.count;++i){
+        const auto kind=bar.items[i].kind;
         if(kind!=header_bar::Kind::wifi && kind!=header_bar::Kind::battery && kind!=header_bar::Kind::plugin)continue;
-        const auto now_shown=header_bar::device_item(bar->items[i],device);
+        const auto now_shown=header_bar::device_item(bar.items[i],device);
         now_said+=std::to_string(now_shown.shown)+':'+std::to_string(now_shown.icon)+':'+now_shown.text+':'+std::to_string(now_shown.has_color?now_shown.color:0)+'\x1f';
       }
       if(now_said!=said){said=std::move(now_said);refresh_header_only();}
