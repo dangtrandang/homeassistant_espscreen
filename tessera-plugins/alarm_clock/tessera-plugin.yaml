@@ -9,7 +9,7 @@ topics: [time]
 requires:
   esphome: 2026.9.0
 boards: any
-flash_kb: 118
+flash_kb: 20
 
 tiles:
   - id: alarms
