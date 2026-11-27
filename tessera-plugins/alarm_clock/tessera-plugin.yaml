@@ -8,8 +8,6 @@ stage: beta
 topics: [time]
 requires:
   esphome: 2026.9.0
-  psram: true
-  features: [speaker]
 boards: any
 flash_kb: 118
 
