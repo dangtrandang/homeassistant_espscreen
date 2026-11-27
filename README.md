@@ -80,6 +80,9 @@ Bản tùy biến nâng cao của [MaxGramser/homeassistant_espscreen](https://g
     - **Chiếm & trả quyền Audio sạch sẽ (`audio_owner`)**: Khi `RINGING`, plugin tự claim `Side::BOTH` ở mức `Role::DOORBELL` (`id = 100`) để tạm dừng `micro_wake_word` và nhạc nền; ngay khi người dùng bấm **Báo lại (Snooze)** hoặc **Tắt (Dismiss)**, quyền micro được trả lại tức thì để **Trợ lý Meow** tự động khôi phục nhận diện Wake Word (`DETECTING_WAKE_WORD`).
     - **Popup báo thức chống tắt nhầm & giữ sáng màn hình**: Khi đến giờ, tự gọi `tessera::wake()` đánh thức màn hình từ standby/Sleep, giữ sáng liên tục không bị `AUTO_DIM_TIMEOUT` (`3s`) tắt qua hook trong `packages/core.yaml`, hiển thị giờ + tên báo thức + 2 nút lớn (**Báo lại** / **Tắt**). Chạm ra ngoài hoặc bấm nút `X` sẽ tự mở lại popup thay vì vô tình tắt chuông.
     - **Quản lý trực tiếp bằng cảm ứng (Cài đặt → Báo thức)**: Tích hợp `AlarmManagerCard` full-screen tối ưu cho màn 2.8" hỗ trợ xem danh sách cuộn dọc (tự refresh khi có thay đổi từ Popup/HA), bật/tắt trực tiếp, thêm/sửa giờ-phút-ngày lặp (`T2–CN` hoặc 1 lần), chọn nhanh tên mẫu, xóa xác nhận 2 chạm, kèm cài đặt thời gian Snooze (`1–30 phút`) và âm lượng chuông (`10–100%`).
+    - **Hiển thị Top Bar & Plugin Tile cục bộ (`alarm_tile.h`)**:
+      - **Top Bar (`plugin:alarm_clock.next`)**: tự động hiển thị `⏰ HH:MM` gần nhất trên thanh tiêu đề mọi trang (đổi sang màu cam `Tone::BUSY` kèm giờ Snooze khi đang báo lại, tự ẩn khi không có báo thức bật; tự chèn chống trùng tại `runtime_tiles.h`).
+      - **Plugin Tile (`plugin:alarm_clock.alarms`)**: đọc trực tiếp từ NVS/Engine 100% offline, tự thích ứng kích thước **`1×1`** (giờ gần nhất + số mốc còn lại), **`2×1`** (giờ gần nhất + lặp + tên), **`2×2`** (danh sách 4 báo thức sắp kêu gần nhất), chạm trực tiếp vào tile để mở ngay `AlarmManagerCard`. Có thể thêm vào Tessera Screen Manager bằng link GitHub `https://github.com/dangtrandang/homeassistant_espscreen/tree/main/tessera-plugins/alarm_clock`.
     - **Đồng bộ Home Assistant 2 chiều (Per-ID LWW + ACK + Snapshot)**: Cung cấp ESPHome API actions (`alarm_upsert`, `alarm_delete`, `alarm_toggle`, `alarm_sync_request`, `alarm_snooze`, `alarm_dismiss`) kèm cơ chế Last-Write-Wins theo từng `alarm_id` + tombstone xóa. ESP32 chỉ phát event `esphome.alarm_ack` (kèm `req_id` và `saved_alarm` thực tế) sau khi ghi NVS thành công, đồng thời đẩy `esphome.alarm_snapshot` mỗi khi thay đổi hoặc khi API kết nối lại.
 
 ---
@@ -90,7 +93,7 @@ Bản tùy biến nâng cao của [MaxGramser/homeassistant_espscreen](https://g
 | :--- | :--- |
 | `tessera_freenove_28.yaml` | File cấu hình ESPHome hoàn chỉnh cho bo mạch Freenove ESP32-S3 2.8" (FNK0104) kèm Audio ES8311 & Voice Assistant. |
 | `tessera-plugins/voice_assist/` | Plugin Voice Assistant chính thức của Tessera (`micro_wake_word`, giao diện Popup sóng âm, `wake.wav` / `thinking.wav`). |
-| `tessera-plugins/alarm_clock/` | Plugin Báo thức Local-First + HA Sync (`alarm_clock.h/.cpp`, `alarm_popup.h`, `alarm_card.h`, `alarm.wav`, NVS `CLK1`, LWW + ACK). |
+| `tessera-plugins/alarm_clock/` | Plugin Báo thức Local-First + HA Sync (`alarm_clock.h/.cpp`, `alarm_popup.h`, `alarm_card.h`, `alarm_tile.h`, `alarm.wav`, NVS `CLK1`, Top Bar, LWW + ACK). |
 | `tcp_tunnel.h` | Thư viện C++ Reverse TCP Tunnel chạy ngầm trên FreeRTOS kết nối ESP32 với VPS. |
 | `wol.h` | Thư viện C++ gửi Wake-on-LAN Magic Packet (102 bytes) qua LwIP UDP directed broadcast non-blocking trên Wi-Fi STA. |
 | `docker-compose-tessera.yaml` | File Docker Compose để chạy dịch vụ quản lý màn hình Tessera (`esp-screens`) trên VPS. |
