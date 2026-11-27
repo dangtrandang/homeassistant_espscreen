@@ -11,7 +11,15 @@ requires:
   psram: true
   features: [speaker]
 boards: any
-flash_kb: 112
+flash_kb: 118
+
+tiles:
+  - id: alarms
+    name: tile_name
+    icon: alarm
+    sizes: { min: 1x1, max: 4x2 }
+    memory: 700
+    example: tile_example
 
 cards:
   - { id: manager, title: name }

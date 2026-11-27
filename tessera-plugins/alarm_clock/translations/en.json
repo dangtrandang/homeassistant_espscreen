@@ -10,6 +10,8 @@
   },
   "app": {
     "name": "Báo thức",
-    "summary": "Báo thức cục bộ lưu trong NVS, hoạt động độc lập theo đồng hồ SNTP ngay cả khi mất mạng hoặc Home Assistant vắng mặt."
+    "summary": "Báo thức cục bộ lưu trong NVS, hoạt động độc lập theo đồng hồ SNTP ngay cả khi mất mạng hoặc Home Assistant vắng mặt.",
+    "tile_name": "Báo thức",
+    "tile_example": "06:40 · T2–T7"
   }
 }

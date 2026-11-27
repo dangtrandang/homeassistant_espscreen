@@ -13,6 +13,7 @@
 #include "esphome/components/smart_display/plugin_sound.h"
 #include "alarm_card.h"
 #include "alarm_popup.h"
+#include "alarm_tile.h"
 
 namespace esphome::alarm_clock {
 
@@ -136,6 +137,7 @@ class AlarmClock : public Component, public tessera::Plugin {
   void show_popup_();
   void close_popup_();
   tessera::BarItem bar_item_next_() const;
+  AlarmTileState build_tile_state_() const;
   void feed_audio_(uint32_t now_ms);
   AlarmEntry *find_by_id_(uint8_t id, bool include_deleted = false);
   const AlarmEntry *find_by_id_(uint8_t id, bool include_deleted = false) const;

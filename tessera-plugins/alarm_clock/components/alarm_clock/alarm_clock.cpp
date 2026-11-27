@@ -54,6 +54,16 @@ void AlarmClock::setup() {
       },
       true);
   add_bar_item("next", [this]() { return bar_item_next_(); });
+  add_tile("alarms", [this]() {
+    AlarmTileOps ops;
+    ops.is_ringing = [this]() { return is_ringing(); };
+    ops.revision = [this]() { return store_revision(); };
+    ops.snapshot = [this]() { return build_tile_state_(); };
+    ops.open_manager = [this](int tile_idx) {
+      tessera::open_card(plugin_id(), "manager", "", tile_idx, "Báo thức");
+    };
+    return new AlarmTile(std::move(ops));
+  });
   ESP_LOGI(TAG, "AlarmClock initialized (NVS key=0x%08X, max=%u, wav=%u bytes @ %u Hz)",
            static_cast<unsigned>(ALARM_NVS_HASH), static_cast<unsigned>(MAX_ALARMS),
            static_cast<unsigned>(alarm_sound_.length), static_cast<unsigned>(alarm_sound_.rate));
@@ -232,6 +242,79 @@ tessera::BarItem AlarmClock::bar_item_next_() const {
   item.text = hhmm;
   item.tone = tessera::Tone::ACCENT;
   return item;
+}
+
+AlarmTileState AlarmClock::build_tile_state_() const {
+  AlarmTileState st;
+  st.ringing = (state_ == AlarmState::RINGING);
+  st.snoozed = (state_ == AlarmState::SNOOZED && snooze_until_epoch_ > 0);
+
+  // If snoozed, place the active snooze target first so 1x1 and 2x1 immediately reflect it.
+  if (st.snoozed) {
+    const auto t = ESPTime::from_epoch_local(snooze_until_epoch_);
+    const AlarmEntry *src = find_by_id_(active_alarm_id_);
+    AlarmTileEntry e;
+    e.hour = t.hour;
+    e.minute = t.minute;
+    e.repeat_days = src ? src->repeat_days : 0;
+    e.label = (src && src->label[0] != '\0') ? std::string(src->label) : std::string("Báo thức");
+    e.is_snooze = true;
+    st.upcoming.push_back(std::move(e));
+  }
+
+  const bool valid = (time_ != nullptr && time_->now().is_valid());
+  const auto now = valid ? time_->now() : ESPTime{};
+  const uint32_t cur_min = valid ? static_cast<uint32_t>(now.timestamp) / 60UL : 0;
+  const int now_min_of_day = valid ? (now.hour * 60 + now.minute) : 0;
+
+  struct Ranked {
+    int delta_min;
+    const AlarmEntry *entry;
+  };
+  std::vector<Ranked> ranked;
+  for (const auto &a : store_.alarms) {
+    if (a.id == 0 || a.deleted != 0 || !a.enabled) continue;
+    int delta_min = a.hour * 60 + a.minute;
+    if (valid) {
+      const int a_min = a.hour * 60 + a.minute;
+      int delta_days = 0;
+      if (a.repeat_days == 0) {
+        const bool passed_today = (a_min < now_min_of_day) ||
+                                  (a_min == now_min_of_day && (now.second > 0 || a.last_fired_minute == cur_min));
+        delta_days = passed_today ? 1 : 0;
+      } else {
+        delta_days = 7;
+        for (int d = 0; d <= 7; ++d) {
+          const uint8_t dow = static_cast<uint8_t>(((now.day_of_week - 1 + d) % 7) + 1);
+          if (!matches_weekday_(a.repeat_days, dow)) continue;
+          if (d == 0) {
+            const bool passed_today = (a_min < now_min_of_day) ||
+                                      (a_min == now_min_of_day && (now.second > 0 || a.last_fired_minute == cur_min));
+            if (passed_today) continue;
+          }
+          delta_days = d;
+          break;
+        }
+      }
+      delta_min = delta_days * 1440 + a_min - now_min_of_day;
+    }
+    ranked.push_back({delta_min, &a});
+  }
+  std::sort(ranked.begin(), ranked.end(), [](const Ranked &x, const Ranked &y) {
+    if (x.delta_min != y.delta_min) return x.delta_min < y.delta_min;
+    return x.entry->id < y.entry->id;
+  });
+
+  for (const auto &r : ranked) {
+    AlarmTileEntry e;
+    e.hour = r.entry->hour;
+    e.minute = r.entry->minute;
+    e.repeat_days = r.entry->repeat_days;
+    e.label = r.entry->label;
+    e.is_snooze = false;
+    st.upcoming.push_back(std::move(e));
+  }
+  return st;
 }
 
 void AlarmClock::publish_snapshot() {
