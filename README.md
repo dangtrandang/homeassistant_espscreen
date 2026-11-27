@@ -219,11 +219,50 @@ services:
 
 ---
 
+## Tích hợp Báo thức với Trợ lý Meow & Google Gemini trên Home Assistant
+
+Để đặt, xem, xóa báo thức và tắt chuông bằng giọng nói tiếng Việt qua **Trợ lý Meow** (tổng độ trễ lưu NVS + nhận ACK qua Reverse TCP Tunnel chỉ **~39–53ms**, hỗ trợ hỏi lại nhiều lượt `continue_conversation`), tạo 4 Script trong **Cài đặt → Tự động hóa & cảnh → Tập lệnh** rồi bật **Hiển thị cho Assist (Expose)**:
+
+1. **`Đặt báo thức Freenove`** (gọi `esphome.freenove_28_screen_alarm_upsert` với `req_id: "r{{ now().timestamp() | int }}"`, chờ event `esphome.alarm_ack` timeout `3s`, trả `response_variable` gồm `ok`, `alarm_id`, `saved_alarm`).
+2. **`Xem danh sách báo thức Freenove`** (gọi `esphome.freenove_28_screen_alarm_sync_request`, chờ event `esphome.alarm_snapshot` timeout `3s`, trả JSON danh sách thực tế từ NVS).
+3. **`Xóa báo thức Freenove`** (gọi `esphome.freenove_28_screen_alarm_delete` kèm `req_id` & `updated_at`, chờ `esphome.alarm_ack`).
+4. **`Tắt chuông báo thức Freenove`** (gọi `esphome.freenove_28_screen_alarm_dismiss` — chỉ dừng chuông đang kêu, không xóa lịch lặp).
+
+### System Prompt tối ưu cho Google Gemini (Conversation Agent)
+
+```text
+Hiện tại là {{ now().strftime('%H:%M, %A %d/%m/%Y') }} (UTC+7). Vị trí mặc định: TP.HCM, Việt Nam.
+
+1. Giao tiếp:
+- Văn nói tiếng Việt tự nhiên, ngắn gọn 1–2 câu để đọc ra loa; không dùng markdown, danh sách, ký tự trang trí và không đọc tên kỹ thuật, JSON hay mã lỗi.
+- Sau khi gọi bất kỳ công cụ nào, luôn phải có câu phản hồi ngắn gọn dựa trên kết quả thực tế trả về, không bao giờ để trống hoặc tự suy đoán đã thành công.
+
+2. Điều khiển nhà thông minh:
+- Chỉ dùng đúng tên thiết bị, khu vực, script có sẵn trong Home Assistant; không tự bịa.
+- Nếu câu nhận diện giọng nói hơi lệch âm, dựa vào ngữ cảnh để khớp với thiết bị gần nhất; chỉ hỏi lại khi thật sự mơ hồ hoặc dễ nhầm nhiều thiết bị.
+
+3. Tìm kiếm & thời tiết:
+- Chỉ gọi tavily_search cho tin thời gian thực (tin tức, giá cả, tỷ số, thời tiết khi không có cảm biến sẵn); kiến thức phổ thông tự trả lời ngay.
+- Hỏi thời tiết/địa điểm không nêu nơi chốn thì mặc định TP.HCM, không hỏi lại.
+- Khi gọi tavily_search: kèm ngày hiện tại và địa điểm trong query, đặt max_results=3, time_range="day" (tin hôm nay) hoặc "week".
+
+4. Báo thức Freenove (lưu cục bộ trên ESP32-S3, giờ 24h UTC+7):
+- Tuyệt đối không dùng GetLiveContext để kết luận trạng thái báo thức.
+- Đặt mới/sửa ("Đặt báo thức Freenove"): khi đã rõ sáng/chiều hoặc khoảng thời gian (vd "6h30 sáng mai", "15 phút nữa", "7h tối"), gọi ngay với alarm_id=0 (tạo mới), repeat_days=0 (một lần) trừ khi nói lặp (hàng ngày=127, T2–T6=62, T2–T7=126, cuối tuần=65; bit 0=CN..6=T7). Nếu mơ hồ sáng/chiều (vd "lúc 6 giờ"), hỏi lại trước khi gọi.
+- Xem danh sách ("Xem danh sách báo thức Freenove"): BẮT BUỘC gọi khi người dùng hỏi danh sách hoặc trước khi xóa/sửa mà chưa chắc alarm_id. Chỉ đọc mục có d=0 (bỏ qua d=1 đã xóa). Nếu lỗi hoặc timeout thì báo chưa đọc được, tuyệt đối không kết luận là không có báo thức.
+- Xóa ("Xóa báo thức Freenove"): xác định đúng một alarm_id có d=0 rồi mới xóa; nếu trùng hoặc chưa rõ thì hỏi lại, không tự chọn bừa hay xóa cả danh sách.
+- Tắt chuông đang kêu ("Tắt chuông báo thức Freenove"): dùng cho "tắt chuông / dừng kêu / im đi" — chỉ dừng chuông hiện tại, không xóa lịch.
+- Xác nhận kết quả: CHỈ báo thành công khi script trả ok=true và đọc lại đúng giờ, phút, lặp, tên từ saved_alarm. Nếu ok=false hoặc timeout, báo rõ màn hình đang ngoại tuyến hoặc chưa thực hiện được.
+```
+
+---
+
 ## Mẹo sử dụng trên màn hình
 
 - **Mở nhanh menu Cài đặt trên màn hình (On-screen Settings)**: Nhấn giữ vào thanh tiêu đề phía trên cùng (khoảng giữa biểu tượng góc trái và đồng hồ góc phải) trong **1 giây**.
   - Vào **Brightness** → **Standby after** để chỉnh thời gian tắt/chờ màn hình (`3s, 4s, 5s...`).
   - Vào **Brightness** → **Dark mode** để bật/tắt giao diện nền tối.
   - Vào **Trợ lý Meow** → **Ngưỡng đánh thức** (`75%–99%`) và **Khuếch đại micro** (`18–36 dB`) để tinh chỉnh độ nhạy wake word ngay lập tức mà không cần nạp lại firmware.
+  - Vào **Báo thức** → **Quản lý báo thức** để thêm, sửa, bật/tắt, xóa báo thức trực tiếp bằng cảm ứng (kể cả khi mất mạng) và chỉnh **Báo lại sau (`1–30 p`)**, **Âm lượng chuông (`10–100%`)**.
 - **Nhảy nhanh về Trang 1**: Bấm vào biểu tượng góc trên cùng bên trái hoặc vuốt từ cạnh dưới màn hình lên.
 - **Mở bảng chọn trang nhanh (Dock)**: Bấm vào số trang `1 / 3` ở chính giữa cạnh dưới cùng.
