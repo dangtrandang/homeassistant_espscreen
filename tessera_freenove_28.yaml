@@ -64,6 +64,7 @@ esphome:
   min_version: 2024.6.0
   includes:
     - tcp_tunnel.h
+    - wol.h
   on_boot:
     priority: -200
     then:
@@ -101,6 +102,24 @@ wifi:
 
 ota:
   - platform: esphome
+
+api:
+  actions:
+    - action: send_wol
+      variables:
+        mac: string
+      then:
+        - if:
+            condition:
+              lambda: 'return wol::is_valid_mac(mac);'
+            then:
+              - repeat:
+                  count: 3
+                  then:
+                    - lambda: 'wol::send_once(mac, iteration);'
+                    - delay: 30ms
+            else:
+              - lambda: 'ESP_LOGW("wol", "Invalid MAC address: %s", mac.c_str());'
 
 time:
   - platform: sntp

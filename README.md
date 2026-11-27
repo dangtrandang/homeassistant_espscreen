@@ -71,6 +71,12 @@ Bản tùy biến nâng cao của [MaxGramser/homeassistant_espscreen](https://g
    - **Tầng 3 - TTS (Text-to-Speech)**: **Wyoming-Piper** chạy container Docker nội bộ trên VPS (`rhasspy/wyoming-piper` với voice `vi_VN-vais1000-medium`) – sinh âm thanh phản hồi tức thì trong **`0.002 giây (2ms)`**, loại bỏ hoàn toàn hiện tượng chập chờn, timeout hoặc bị Google chặn IP (429 Too Many Requests).
    - **Tổng thời gian từ lúc dứt câu nói đến khi đèn bật và loa phát tiếng**: Đạt mức kỷ lục **`0.54 – 0.58 giây`**!
 
+10. **Tích hợp Wake-on-LAN (WoL) cục bộ qua ESPHome Native API (`wol.h`)**:
+    - **Giải quyết bài toán Cloud VPS ↔ LAN nhà**: Home Assistant trên VPS không thể tự broadcast gói Layer 2 về mạng LAN nhà, nên ESP32-S3 (`192.168.1.200`) đảm nhiệm vai trò gửi **Magic Packet (102 bytes)** trực tiếp trong mạng LAN qua Wi-Fi STA (`st1`), thay thế hoàn toàn mạch ESP32-C3 Mini và không cần MQTT.
+    - **Kiến trúc Stateless trên ESP32-S3**: Firmware chỉ cung cấp duy nhất ESPHome API action `esphome.freenove_28_screen_send_wol(mac)` (hỗ trợ định dạng `AA:BB:CC:DD:EE:FF`, `AA-BB-CC-DD-EE-FF`, `AABBCCDDEEFF`), không lưu MAC trong Flash. Toàn bộ danh sách MAC PC/NAS và kịch bản được quản lý linh hoạt trên Home Assistant (`input_text.pc_mac` + `script.wake_pc`) — thêm/sửa máy không cần build hay OTA lại firmware.
+    - **An toàn định tuyến & Non-blocking**: Tự động lấy IP và netmask thực tế của interface `WIFI_STA_DEF` (`esp_netif_get_ip_info`), bind IP nguồn Wi-Fi STA và gửi **directed subnet broadcast** (`192.168.1.255:9`) nên hoạt động ổn định ngay cả khi WireGuard đang bật. Gửi lặp 3 gói liên tiếp bằng `MSG_DONTWAIT` + `delay: 30ms` của ESPHome scheduler (không tạo FreeRTOS task riêng, không chặn LVGL hay Audio/Wake Word).
+    - **Điều khiển đa kênh**: Bật PC từ xa qua app/Dashboard Home Assistant (1 chạm), chạm trực tiếp trên màn hình cảm ứng Tessera, hoặc ra lệnh giọng nói qua **Trợ lý Meow** (*"Okay Nabu, bật máy tính"*).
+
 ---
 
 ## Cấu trúc thư mục quan trọng
@@ -80,6 +86,7 @@ Bản tùy biến nâng cao của [MaxGramser/homeassistant_espscreen](https://g
 | `tessera_freenove_28.yaml` | File cấu hình ESPHome hoàn chỉnh cho bo mạch Freenove ESP32-S3 2.8" (FNK0104) kèm Audio ES8311 & Voice Assistant. |
 | `tessera-plugins/voice_assist/` | Plugin Voice Assistant chính thức của Tessera (`micro_wake_word`, giao diện Popup sóng âm, `wake.wav` / `thinking.wav`). |
 | `tcp_tunnel.h` | Thư viện C++ Reverse TCP Tunnel chạy ngầm trên FreeRTOS kết nối ESP32 với VPS. |
+| `wol.h` | Thư viện C++ gửi Wake-on-LAN Magic Packet (102 bytes) qua LwIP UDP directed broadcast non-blocking trên Wi-Fi STA. |
 | `docker-compose-tessera.yaml` | File Docker Compose để chạy dịch vụ quản lý màn hình Tessera (`esp-screens`) trên VPS. |
 | `components/smart_display/plugin_host.cpp` | Quản lý vòng đời plugin và popup (`popup_show`, `popup_hide`, tối ưu scrim trong suốt triệt tiêu quét màn hình). |
 | `components/smart_display/optimistic.h` | Xử lý trạng thái Optimistic UI khi bật/tắt thiết bị (đã vá lỗi công tắc Tuya). |
