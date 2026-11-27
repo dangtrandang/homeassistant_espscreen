@@ -818,6 +818,7 @@ interval:
               // A doorbell's ring on the glass (module doorbell) stays lit until it closes.
               if (runtime_tiles::doorbell_holds()) return false;
               if (id(va_plugin).busy() || id(va_plugin).current() != esphome::voice_assist::Phase::IDLE) return false;
+              if (id(alarm_plugin).is_ringing()) return false;
               return (millis() - id(last_touch_ms)) > (screen_settings::current.standby_seconds * 1000UL);
           then:
             - script.execute: dim_display

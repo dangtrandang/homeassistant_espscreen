@@ -1,0 +1,120 @@
+# Local-first Alarm Clock plugin (Stage 4: HA Sync + Per-ID LWW + ACK + Snapshot)
+alarm_clock:
+  id: alarm_plugin
+  time_id: sntp_time
+  speaker: ts_speaker
+
+esphome:
+  on_boot:
+    priority: -100
+    then:
+      - lambda: |-
+          id(alarm_plugin).set_ack_callback(
+              [](const std::string &req_id, int alarm_id, bool ok, const std::string &error,
+                 uint32_t updated_at, const std::string &saved_alarm_json) {
+                id(alarm_emit_ack).execute(req_id, alarm_id, ok, error, static_cast<int>(updated_at), saved_alarm_json);
+              });
+          id(alarm_plugin).set_snapshot_callback(
+              [](const std::string &snapshot_json, const std::string &status_text) {
+                id(alarm_status_text).publish_state(status_text);
+                if (esphome::api_is_connected()) {
+                  id(alarm_emit_snapshot).execute(snapshot_json);
+                }
+              });
+
+text_sensor:
+  - platform: template
+    id: alarm_status_text
+    name: "Alarm Status"
+    icon: mdi:alarm
+    update_interval: never
+
+script:
+  - id: alarm_emit_ack
+    mode: queued
+    max_runs: 6
+    parameters:
+      req_id: string
+      alarm_id: int
+      ok: bool
+      error: string
+      updated_at: int
+      saved_alarm: string
+    then:
+      - homeassistant.event:
+          event: esphome.alarm_ack
+          data:
+            screen: !lambda 'return App.get_name();'
+            req_id: !lambda 'return req_id;'
+            alarm_id: !lambda 'return std::to_string(alarm_id);'
+            ok: !lambda 'return ok ? "true" : "false";'
+            error: !lambda 'return error;'
+            updated_at: !lambda 'return std::to_string(updated_at);'
+            saved_alarm: !lambda 'return saved_alarm;'
+
+  - id: alarm_emit_snapshot
+    mode: restart
+    parameters:
+      snapshot: string
+    then:
+      - homeassistant.event:
+          event: esphome.alarm_snapshot
+          data:
+            screen: !lambda 'return App.get_name();'
+            snapshot: !lambda 'return snapshot;'
+
+api:
+  on_client_connected:
+    - lambda: 'id(alarm_plugin).on_api_connected();'
+  actions:
+    - action: alarm_upsert
+      variables:
+        req_id: string
+        id: int
+        hour: int
+        minute: int
+        repeat_days: int
+        enabled: bool
+        label: string
+        updated_at: int
+      then:
+        - lambda: |-
+            id(alarm_plugin).ha_upsert(req_id, id, hour, minute, repeat_days, enabled, label,
+                                       updated_at > 0 ? static_cast<uint32_t>(updated_at) : 0UL);
+    - action: alarm_delete
+      variables:
+        req_id: string
+        id: int
+        updated_at: int
+      then:
+        - lambda: |-
+            id(alarm_plugin).ha_delete(req_id, id, updated_at > 0 ? static_cast<uint32_t>(updated_at) : 0UL);
+    - action: alarm_toggle
+      variables:
+        req_id: string
+        id: int
+        enabled: bool
+        updated_at: int
+      then:
+        - lambda: |-
+            id(alarm_plugin).ha_toggle(req_id, id, enabled, updated_at > 0 ? static_cast<uint32_t>(updated_at) : 0UL);
+    - action: alarm_sync_request
+      then:
+        - lambda: 'id(alarm_plugin).publish_snapshot();'
+    - action: alarm_set_in_minutes
+      variables:
+        minutes: int
+        label: string
+      then:
+        - lambda: 'id(alarm_plugin).set_in_minutes(minutes, label);'
+    - action: alarm_snooze
+      variables:
+        minutes: int
+      then:
+        - lambda: 'id(alarm_plugin).snooze(minutes);'
+    - action: alarm_dismiss
+      then:
+        - lambda: 'id(alarm_plugin).dismiss();'
+    - action: alarm_dump
+      then:
+        - lambda: 'id(alarm_plugin).dump_to_log();'

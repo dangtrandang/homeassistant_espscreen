@@ -1,0 +1,17 @@
+id: alarm_clock
+version: 0.1.0
+api: "0.24"
+icon: alarm
+maintainer: local
+license: MIT
+stage: beta
+topics: [clock]
+requires:
+  esphome: 2026.9.0
+  psram: true
+  features: [speaker]
+boards: any
+flash_kb: 112
+
+cards:
+  - { id: manager, title: name }

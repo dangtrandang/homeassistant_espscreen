@@ -167,6 +167,7 @@ packages:
   self_test: !include .esphome/packages/da5e1664/packages/features/self-test.yaml
   audio: !include .esphome/packages/da5e1664/packages/features/audio.yaml
   voice_assist: !include tessera-plugins/voice_assist/plugin.yaml
+  alarm_clock: !include tessera-plugins/alarm_clock/plugin.yaml
 
 external_components:
   - source:
@@ -177,6 +178,10 @@ external_components:
       type: local
       path: tessera-plugins/voice_assist/components
     components: [voice_assist]
+  - source:
+      type: local
+      path: tessera-plugins/alarm_clock/components
+    components: [alarm_clock]
 
 # Cấu hình chân kết nối phần cứng Freenove ESP32-S3 2.8"
 

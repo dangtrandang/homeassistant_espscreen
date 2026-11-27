@@ -1,0 +1,15 @@
+{
+  "_meta": {
+    "name": "English"
+  },
+  "screen": {
+    "name": "Báo thức",
+    "snooze": "Báo lại",
+    "dismiss": "Tắt",
+    "no_alarms": "Chưa có báo thức"
+  },
+  "app": {
+    "name": "Báo thức",
+    "summary": "Báo thức cục bộ lưu trong NVS, hoạt động độc lập theo đồng hồ SNTP ngay cả khi mất mạng hoặc Home Assistant vắng mặt."
+  }
+}

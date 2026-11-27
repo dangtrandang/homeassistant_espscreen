@@ -21,7 +21,8 @@ Bản tùy biến nâng cao của [MaxGramser/homeassistant_espscreen](https://g
      - **Đảm bảo tính Idempotent cho Voice Session**: Bổ sung cờ `session_holds_` và kiểm tra chuyển trạng thái `phase(LISTENING)`, ngăn chặn việc `on_wake()` cục bộ và sự kiện `on_listening` từ Home Assistant gọi kích hoạt popup 2 lần liên tiếp gây giật hình.
    - **Tối ưu độ nhạy Wake Word, chống kích hoạt nhầm & Cân chỉnh Live (Lifecycle & Live Tuning)**:
      - Bật bộ lọc `VAD` (`probability_cutoff: 35%`) kết hợp `sliding_window_size: 5` và ngưỡng mặc định `86%` (`Okay Nabu` / `Hey Jarvis`) / `85%` (`Hey Mycroft`), triệt tiêu tình trạng tự wake nhầm trong hội thoại bình thường nhưng vẫn bắt tốt từ khoảng cách ~3m.
-     - Tối ưu luồng âm thanh gửi lên STT tiếng Việt: `noise_suppression_level: 1`, `auto_gain: 31dBFS`, `volume_multiplier: 2.0`.
+     - Tối ưu luồng âm thanh gửi lên STT tiếng Việt: `noise_suppression_level: 2`, `auto_gain: 0dBFS`, `volume_multiplier: 1.0` (tránh khuếch đại nhiễu nền gây kích hoạt nhầm VAD), kèm `delay: 300ms` sau `on_wake()` trước khi gọi `voice_assistant.start` để tiếng `wake.wav` không lọt vào đầu phiên thu âm.
+     - **Tự ngắt phiên nghe khi im lặng (`5 giây`)**: Nếu quá `5000ms` kể từ lúc wake mà Home Assistant VAD chưa phát hiện tiếng nói (`on_stt_vad_start`), `VoiceAssist` tự gọi `stop()` để hủy phiên nghe sạch sẽ, tránh gửi 15 giây im lặng lên Whisper gây ảo giác (hallucination); đồng thời đảm bảo dừng `thinking_sound_` trong `ended()` nếu pipeline kết thúc sớm.
      - **Chỉnh độ nhạy trực tiếp trong Cài đặt (không cần build/OTA lại)**: Bổ sung 2 mục chỉnh thời gian thực trong **Cài đặt → Trợ lý Meow** (hiện trên cả màn hình cảm ứng lẫn Home Assistant, tự lưu vào Flash NVS):
        - **Ngưỡng đánh thức (`75%` – `99%`, bước `1%`)**: gọi trực tiếp `set_probability_cutoff()` cho các model `micro_wake_word`, áp dụng ngay lập tức.
        - **Khuếch đại micro (`18 dB` / `24 dB` / `30 dB` / `36 dB`)**: ghi trực tiếp thanh ghi ADC gain (`0x16`) của chip `ES8311` qua I2C theo thời gian thực.
@@ -62,11 +63,7 @@ Bản tùy biến nâng cao của [MaxGramser/homeassistant_espscreen](https://g
    - Tách riêng đồng hồ hệ thống theo máy chủ SNTP (`216.239.35.0`), ngăn `homeassistant_time` ghi đè giờ sai lệch múi giờ từ VPS.
 
 9. **Kiến trúc Pipeline Voice Assistant Tiếng Việt Siêu Tốc (Tổng độ trễ phản hồi kỷ lục ~0.54 giây)**:
-   - **Tầng 1 - STT (Speech-to-Text)**: **GroqCloud Whisper** (`whisper-large-v3` / `whisper-large-v3-turbo` qua HACS `ha-openai-whisper-stt-api` / *Whisper Cloud*) – nhận diện tiếng Việt chính xác 100% trên chip LPU chuyên dụng với thời gian chỉ **`0.31 giây (314ms)`**. Cấu hình mồi ngữ cảnh động trong `Prompt (Optional)`:
-     ```jinja2
-     bật, tắt, mở, đóng, tăng, giảm, {{ assist_entity_names }}
-     ```
-     giúp Whisper luôn ưu tiên từ khóa hành động và tự động đồng bộ tên/bí danh của toàn bộ thiết bị trong nhà theo thời gian thực, triệt tiêu hoàn toàn lỗi nhận diện sai từ phát âm gần giống.
+   - **Tầng 1 - STT (Speech-to-Text)**: **GroqCloud Whisper** (`whisper-large-v3` / `whisper-large-v3-turbo` qua HACS `ha-openai-whisper-stt-api` / *Whisper Cloud*) – nhận diện tiếng Việt nhanh trên chip LPU chuyên dụng với thời gian chỉ **`~0.31 giây (314ms)`**. *Lưu ý:* Nên để trống `Prompt (Optional)` (tránh nhồi `{{ assist_entity_names }}`) để hạn chế hiện tượng Whisper đọc lặp lại tên thiết bị (hallucination) khi gặp đoạn audio ngắn hoặc nhiễu nền.
    - **Tầng 2 - Intent & Semantic Resolution**: Home Assistant Assist bật **Ưu tiên xử lý cục bộ (Prefer local intents)** – đối chiếu tên thiết bị và bí danh (Aliases: *Đèn sân, Đèn sông, Đèn xong...*) để thực thi bật/tắt thiết bị tức thì trong **`0.22 giây (222ms)`** mà không cần gọi cloud. Đồng thời kết nối **Google Gemini (Flash Lite)** làm bộ não dự phòng phía sau với System Prompt thông minh để xử lý các câu hội thoại phức tạp và sửa lỗi phát âm.
    - **Tầng 3 - TTS (Text-to-Speech)**: **Wyoming-Piper** chạy container Docker nội bộ trên VPS (`rhasspy/wyoming-piper` với voice `vi_VN-vais1000-medium`) – sinh âm thanh phản hồi tức thì trong **`0.002 giây (2ms)`**, loại bỏ hoàn toàn hiện tượng chập chờn, timeout hoặc bị Google chặn IP (429 Too Many Requests).
    - **Tổng thời gian từ lúc dứt câu nói đến khi đèn bật và loa phát tiếng**: Đạt mức kỷ lục **`0.54 – 0.58 giây`**!
@@ -77,6 +74,14 @@ Bản tùy biến nâng cao của [MaxGramser/homeassistant_espscreen](https://g
     - **An toàn định tuyến & Non-blocking**: Tự động lấy IP và netmask thực tế của interface `WIFI_STA_DEF` (`esp_netif_get_ip_info`), bind IP nguồn Wi-Fi STA và gửi **directed subnet broadcast** (`192.168.1.255:9`) nên hoạt động ổn định ngay cả khi WireGuard đang bật. Gửi lặp 3 gói liên tiếp bằng `MSG_DONTWAIT` + `delay: 30ms` của ESPHome scheduler (không tạo FreeRTOS task riêng, không chặn LVGL hay Audio/Wake Word).
     - **Điều khiển đa kênh**: Bật PC từ xa qua app/Dashboard Home Assistant (1 chạm), chạm trực tiếp trên màn hình cảm ứng Tessera, hoặc ra lệnh giọng nói qua **Trợ lý Meow** (*"Okay Nabu, bật máy tính"*).
 
+11. **Báo thức cục bộ Local-First & Đồng bộ Home Assistant 2 chiều (`tessera-plugins/alarm_clock/`)**:
+    - **Kiến trúc Local-First độc lập mạng/VPS**: Lõi Alarm Engine chạy trực tiếp theo đồng hồ SNTP (`ICT-7`) trên ESP32-S3, lưu tối đa **10 báo thức** vào bộ nhớ Flash NVS bằng khóa riêng `CLK1` (`0x434C4B31`, tách biệt với `ALM1` của `alarm_panel`). Khi mất Wi-Fi hoặc HA VPS ngoại tuyến, báo thức vẫn tự kêu đúng giờ, chống kích hoạt lặp trong cùng 1 phút (`last_fired_minute`) và hỗ trợ cửa sổ kêu bù `≤ 2 phút` sau khi đồng bộ giờ.
+    - **Chuông WAV cục bộ + Software Fade-in không ảnh hưởng âm lượng hệ thống**: Nhúng sẵn file chuông `alarm.wav` (`16kHz`, 16-bit mono PCM) trong Flash, phát lặp mượt trên `ts_speaker` với hiệu ứng tăng dần âm lượng bằng phần mềm (25% → mức trần cấu hình trong 12 giây) nên không làm thay đổi `saved_volume` của `ts_media_player`.
+    - **Chiếm & trả quyền Audio sạch sẽ (`audio_owner`)**: Khi `RINGING`, plugin tự claim `Side::BOTH` ở mức `Role::DOORBELL` (`id = 100`) để tạm dừng `micro_wake_word` và nhạc nền; ngay khi người dùng bấm **Báo lại (Snooze)** hoặc **Tắt (Dismiss)**, quyền micro được trả lại tức thì để **Trợ lý Meow** tự động khôi phục nhận diện Wake Word (`DETECTING_WAKE_WORD`).
+    - **Popup báo thức chống tắt nhầm & giữ sáng màn hình**: Khi đến giờ, tự gọi `tessera::wake()` đánh thức màn hình từ standby/Sleep, giữ sáng liên tục không bị `AUTO_DIM_TIMEOUT` (`3s`) tắt qua hook trong `packages/core.yaml`, hiển thị giờ + tên báo thức + 2 nút lớn (**Báo lại** / **Tắt**). Chạm ra ngoài hoặc bấm nút `X` sẽ tự mở lại popup thay vì vô tình tắt chuông.
+    - **Quản lý trực tiếp bằng cảm ứng (Cài đặt → Báo thức)**: Tích hợp `AlarmManagerCard` full-screen tối ưu cho màn 2.8" hỗ trợ xem danh sách cuộn dọc (tự refresh khi có thay đổi từ Popup/HA), bật/tắt trực tiếp, thêm/sửa giờ-phút-ngày lặp (`T2–CN` hoặc 1 lần), chọn nhanh tên mẫu, xóa xác nhận 2 chạm, kèm cài đặt thời gian Snooze (`1–30 phút`) và âm lượng chuông (`10–100%`).
+    - **Đồng bộ Home Assistant 2 chiều (Per-ID LWW + ACK + Snapshot)**: Cung cấp ESPHome API actions (`alarm_upsert`, `alarm_delete`, `alarm_toggle`, `alarm_sync_request`, `alarm_snooze`, `alarm_dismiss`) kèm cơ chế Last-Write-Wins theo từng `alarm_id` + tombstone xóa. ESP32 chỉ phát event `esphome.alarm_ack` (kèm `req_id` và `saved_alarm` thực tế) sau khi ghi NVS thành công, đồng thời đẩy `esphome.alarm_snapshot` mỗi khi thay đổi hoặc khi API kết nối lại.
+
 ---
 
 ## Cấu trúc thư mục quan trọng
@@ -85,6 +90,7 @@ Bản tùy biến nâng cao của [MaxGramser/homeassistant_espscreen](https://g
 | :--- | :--- |
 | `tessera_freenove_28.yaml` | File cấu hình ESPHome hoàn chỉnh cho bo mạch Freenove ESP32-S3 2.8" (FNK0104) kèm Audio ES8311 & Voice Assistant. |
 | `tessera-plugins/voice_assist/` | Plugin Voice Assistant chính thức của Tessera (`micro_wake_word`, giao diện Popup sóng âm, `wake.wav` / `thinking.wav`). |
+| `tessera-plugins/alarm_clock/` | Plugin Báo thức Local-First + HA Sync (`alarm_clock.h/.cpp`, `alarm_popup.h`, `alarm_card.h`, `alarm.wav`, NVS `CLK1`, LWW + ACK). |
 | `tcp_tunnel.h` | Thư viện C++ Reverse TCP Tunnel chạy ngầm trên FreeRTOS kết nối ESP32 với VPS. |
 | `wol.h` | Thư viện C++ gửi Wake-on-LAN Magic Packet (102 bytes) qua LwIP UDP directed broadcast non-blocking trên Wi-Fi STA. |
 | `docker-compose-tessera.yaml` | File Docker Compose để chạy dịch vụ quản lý màn hình Tessera (`esp-screens`) trên VPS. |
